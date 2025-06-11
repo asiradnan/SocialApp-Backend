@@ -1,25 +1,28 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.authtoken.models import Token
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from .serializers import RegisterSerializer, LoginSerializer
 from .models import CustomUser
+
 
 class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            user = serializer.save()
             return Response({"message": "User registered successfully"}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
     def get(self, request):
         users = CustomUser.objects.all()
         serializer = RegisterSerializer(users, many=True)
         return Response(serializer.data)
+
 
 class LoginView(APIView):
     def post(self, request):
@@ -27,62 +30,38 @@ class LoginView(APIView):
         if serializer.is_valid():
             email = serializer.validated_data['email']
             password = serializer.validated_data['password']
-            
-            # Authenticate user
+
             user = authenticate(request, username=email, password=password)
-            
+
             if user is not None:
-                # Create or get token
-                token, created = Token.objects.get_or_create(user=user)
-                
-                # Update last login
+                refresh = RefreshToken.for_user(user)
                 update_last_login(None, user)
-                
+
                 return Response({
-                    'token': token.key,
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
                     'user_id': user.id,
                     'email': user.email,
                     'message': 'Login successful'
                 }, status=status.HTTP_200_OK)
             else:
-                return Response({
-                    'error': 'Invalid credentials'
-                }, status=status.HTTP_401_UNAUTHORIZED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        try:
-            # Delete the user's token to logout
-            token = Token.objects.get(user=request.user)
-            token.delete()
-            
-            return Response({
-                'message': 'Successfully logged out'
-            }, status=status.HTTP_200_OK)
-        except Token.DoesNotExist:
-            return Response({
-                'error': 'Token not found'
-            }, status=status.HTTP_400_BAD_REQUEST)
 
-# Alternative: Logout all sessions (delete all tokens for the user)
-class LogoutAllView(APIView):
-    permission_classes = [IsAuthenticated]
-    
     def post(self, request):
         try:
-            # Delete all tokens for the user
-            tokens = Token.objects.filter(user=request.user)
-            count = tokens.count()
-            tokens.delete()
-            
-            return Response({
-                'message': f'Successfully logged out from {count} device(s)'
-            }, status=status.HTTP_200_OK)
+            refresh_token = request.data.get("refresh")
+            if not refresh_token:
+                return Response({'error': 'Refresh token is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+
+            return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({
-                'error': 'Logout failed'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Logout failed'}, status=status.HTTP_400_BAD_REQUEST)

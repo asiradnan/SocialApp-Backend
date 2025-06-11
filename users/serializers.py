@@ -8,17 +8,24 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['username', 'email', 'password', 'password2', 'date_of_birth', 'gender', 'user_type']
+        fields = ['email', 'password', 'password2', 'date_of_birth', 'gender', 'user_type']
+
 
     def validate(self, data):
         if data['password'] != data['password2']:
             raise serializers.ValidationError("Passwords do not match.")
+        
         return data
 
     def create(self, validated_data):
+        password = validated_data.pop('password')
         validated_data.pop('password2')
-        user = CustomUser.objects.create_user(**validated_data)
+        validated_data['email'] = validated_data['email'].lower()
+        user = CustomUser(**validated_data)
+        user.set_password(password)
+        user.save()
         return user
+
     
 
 class LoginSerializer(serializers.Serializer):
