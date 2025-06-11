@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-cinnj(5%#i0&zguf2s#z0isc=4ad1j11nwm$_=1!9nkm8d&$@=
 DEBUG = False
 
 ALLOWED_HOSTS = ['127.0.0.1','social.asiradnan.com']
-
+# test
 
 # Application definition
 
