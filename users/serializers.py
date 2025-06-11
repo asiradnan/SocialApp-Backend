@@ -1,4 +1,4 @@
-# serializers.py
+# Alternative serializer - completely removes username from registration
 from rest_framework import serializers
 from .models import CustomUser
 from django.contrib.auth.password_validation import validate_password
@@ -11,7 +11,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['username', 'email', 'password', 'password2', 'date_of_birth', 'gender', 'user_type']
+        fields = ['email', 'password', 'password2', 'date_of_birth', 'gender', 'user_type']  # Removed username
 
     def validate_email(self, value):
         # Normalize email to lowercase
@@ -31,9 +31,19 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password2')
         
-        # Create user with email as the primary identifier
+        # Auto-generate username from email
+        email_prefix = validated_data['email'].split('@')[0]
+        username = email_prefix
+        
+        # Handle duplicate usernames by adding numbers
+        counter = 1
+        while CustomUser.objects.filter(username=username).exists():
+            username = f"{email_prefix}{counter}"
+            counter += 1
+        
+        # Create user with auto-generated username
         user = CustomUser.objects.create_user(
-            username=validated_data.get('username'),
+            username=username,  # Auto-generated
             email=validated_data['email'],
             password=validated_data['password'],
             date_of_birth=validated_data.get('date_of_birth'),
