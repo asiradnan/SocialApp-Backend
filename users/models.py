@@ -12,9 +12,12 @@ class CustomUser(AbstractUser):
     gender = models.CharField(max_length=10, choices=[('male', 'Male'), ('female', 'Female')], null=True, blank=True)
 
     username = None  # remove the default username field
-    email = models.EmailField(unique=True)  # make email required and unique
+    email = models.EmailField(unique=True)  
+    first_name = models.CharField(max_length=150)  
+    last_name = models.CharField(max_length=150)   
 
     USERNAME_FIELD = 'email'  # set email as the username
-    REQUIRED_FIELDS = []  # removes username from required fields
+    REQUIRED_FIELDS = ['first_name', 'last_name','date_of_birth', 'user_type']  
+    
     def __str__(self):
         return self.email

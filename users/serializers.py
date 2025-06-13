@@ -5,11 +5,12 @@ from django.contrib.auth.password_validation import validate_password
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True)
+    first_name = serializers.CharField(required=True, max_length=150)
+    last_name = serializers.CharField(required=True, max_length=150)
 
     class Meta:
         model = CustomUser
-        fields = ['email', 'password', 'password2', 'date_of_birth', 'gender', 'user_type']
-
+        fields = ['first_name', 'last_name', 'email', 'password', 'password2', 'date_of_birth', 'gender', 'user_type']
 
     def validate(self, data):
         if data['password'] != data['password2']:
@@ -25,8 +26,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
-
-    
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
