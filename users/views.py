@@ -72,3 +72,7 @@ class UserView(APIView):
         user = request.user
         serializer = RegisterSerializer(user)
         return Response(serializer.data)
+    
+    
+def test(request):
+    return Response({"Hello": "World!"})
