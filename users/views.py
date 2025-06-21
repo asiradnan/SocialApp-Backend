@@ -74,5 +74,6 @@ class UserView(APIView):
         return Response(serializer.data)
     
     
-def test(request):
-    return Response({"Hello": "World!"})
+class TestView(APIView):
+    def get(self, request):
+        return Response({'message': 'Test successful'})
