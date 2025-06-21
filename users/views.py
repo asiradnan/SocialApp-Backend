@@ -89,5 +89,11 @@ class PasswordView(APIView):
 
         user.set_password(new_password)
         user.save()
-        return Response({'message': 'Password updated successfully'}, status=status.HTTP_200_OK)
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            'message': 'Password updated successfully.',
+            'refresh': str(refresh),
+            'access': str(refresh.access_token)
+        }, status=status.HTTP_200_OK)
     
