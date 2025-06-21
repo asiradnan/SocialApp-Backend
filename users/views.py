@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .serializers import RegisterSerializer, LoginSerializer
+from .serializers import RegisterSerializer, LoginSerializer, UserProfileSerializer
 from .models import CustomUser
 
 
@@ -68,14 +68,15 @@ class LogoutView(APIView):
 
 class UserView(APIView):
     permission_classes = [IsAuthenticated]
+    
     def get(self, request):
         user = request.user
-        serializer = RegisterSerializer(user)
+        serializer = UserProfileSerializer(user)
         return Response(serializer.data)
     
     def put(self, request):
         user = request.user
-        serializer = RegisterSerializer(user, data=request.data, partial=True)
+        serializer = UserProfileSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
