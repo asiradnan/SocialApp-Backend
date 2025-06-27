@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Post, Comment, PostReaction
+from django.db.models import Q
+from .models import Post, Comment, PostReaction, UserScore, LeaderboardEntry
 
 User = get_user_model()
 
@@ -237,3 +238,89 @@ class ReactionSummarySerializer(serializers.Serializer):
     count = serializers.IntegerField()
     emoji = serializers.CharField()
     users = serializers.ListField(child=serializers.DictField())
+
+
+class UserScoreSerializer(serializers.ModelSerializer):
+    """Serializer for user scores"""
+    user = AuthorSerializer(read_only=True)
+    rank = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UserScore
+        fields = [
+            'user', 'total_points', 'weekly_points', 'monthly_points',
+            'total_reactions', 'total_comments', 'weekly_reactions', 
+            'weekly_comments', 'monthly_reactions', 'monthly_comments',
+            'rank', 'updated_at'
+        ]
+        read_only_fields = ['user', 'updated_at']
+    
+    def get_rank(self, obj):
+        """Get current rank based on total points"""
+        return UserScore.objects.filter(total_points__gt=obj.total_points).count() + 1
+
+
+class LeaderboardSerializer(serializers.ModelSerializer):
+    """Serializer for leaderboard entries"""
+    user = AuthorSerializer(read_only=True)
+    
+    class Meta:
+        model = LeaderboardEntry
+        fields = [
+            'user', 'rank', 'points', 'reactions_count', 'comments_count',
+            'period_type', 'year', 'week_number', 'month_number', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+
+
+class CurrentLeaderboardSerializer(serializers.Serializer):
+    """Serializer for current leaderboard data"""
+    user = AuthorSerializer(read_only=True)
+    rank = serializers.IntegerField()
+    points = serializers.IntegerField()
+    reactions_count = serializers.IntegerField()
+    comments_count = serializers.IntegerField()
+    
+    def to_representation(self, instance):
+        """Custom representation for leaderboard data"""
+        if isinstance(instance, UserScore):
+            period_type = self.context.get('period_type', 'total')
+            
+            if period_type == 'weekly':
+                points = instance.weekly_points
+                reactions = instance.weekly_reactions
+                comments = instance.weekly_comments
+            elif period_type == 'monthly':
+                points = instance.monthly_points
+                reactions = instance.monthly_reactions
+                comments = instance.monthly_comments
+            else:
+                points = instance.total_points
+                reactions = instance.total_reactions
+                comments = instance.total_comments
+            
+            return {
+                'user': AuthorSerializer(instance.user).data,
+                'rank': self.context.get('rank', 1),
+                'points': points,
+                'reactions_count': reactions,
+                'comments_count': comments,
+            }
+        return super().to_representation(instance)
+
+
+class UserStatsSerializer(serializers.Serializer):
+    """Serializer for user statistics"""
+    user = AuthorSerializer(read_only=True)
+    total_points = serializers.IntegerField()
+    weekly_points = serializers.IntegerField()
+    monthly_points = serializers.IntegerField()
+    total_rank = serializers.IntegerField()
+    weekly_rank = serializers.IntegerField()
+    monthly_rank = serializers.IntegerField()
+    total_reactions = serializers.IntegerField()
+    total_comments = serializers.IntegerField()
+    weekly_reactions = serializers.IntegerField()
+    weekly_comments = serializers.IntegerField()
+    monthly_reactions = serializers.IntegerField()
+    monthly_comments = serializers.IntegerField()

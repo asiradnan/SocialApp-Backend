@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import MinLengthValidator
 from django.utils import timezone
+from datetime import datetime, timedelta
 
 
 class Post(models.Model):
@@ -113,3 +114,191 @@ class PostReaction(models.Model):
     def emoji(self):
         """Get emoji for the reaction type"""
         return dict(self.REACTION_CHOICES).get(self.reaction_type, '')
+
+
+class UserScore(models.Model):
+    """Model to track user scores for leaderboard"""
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='score'
+    )
+    total_points = models.PositiveIntegerField(default=0)
+    weekly_points = models.PositiveIntegerField(default=0)
+    monthly_points = models.PositiveIntegerField(default=0)
+    
+    # Track when weekly/monthly points were last reset
+    last_weekly_reset = models.DateTimeField(default=timezone.now)
+    last_monthly_reset = models.DateTimeField(default=timezone.now)
+    
+    # Activity counts
+    total_reactions = models.PositiveIntegerField(default=0)
+    total_comments = models.PositiveIntegerField(default=0)
+    weekly_reactions = models.PositiveIntegerField(default=0)
+    weekly_comments = models.PositiveIntegerField(default=0)
+    monthly_reactions = models.PositiveIntegerField(default=0)
+    monthly_comments = models.PositiveIntegerField(default=0)
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-total_points']
+        indexes = [
+            models.Index(fields=['-total_points']),
+            models.Index(fields=['-weekly_points']),
+            models.Index(fields=['-monthly_points']),
+            models.Index(fields=['user']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.total_points} points"
+    
+    @classmethod
+    def get_or_create_for_user(cls, user):
+        """Get or create UserScore for a user"""
+        score, created = cls.objects.get_or_create(
+            user=user,
+            defaults={
+                'last_weekly_reset': cls.get_week_start(),
+                'last_monthly_reset': cls.get_month_start(),
+            }
+        )
+        return score
+    
+    @staticmethod
+    def get_week_start():
+        """Get the start of current week (Monday)"""
+        today = timezone.now().date()
+        days_since_monday = today.weekday()
+        week_start = today - timedelta(days=days_since_monday)
+        return timezone.make_aware(datetime.combine(week_start, datetime.min.time()))
+    
+    @staticmethod
+    def get_month_start():
+        """Get the start of current month"""
+        today = timezone.now().date()
+        month_start = today.replace(day=1)
+        return timezone.make_aware(datetime.combine(month_start, datetime.min.time()))
+    
+    def reset_weekly_if_needed(self):
+        """Reset weekly points if a new week has started"""
+        current_week_start = self.get_week_start()
+        if self.last_weekly_reset < current_week_start:
+            self.weekly_points = 0
+            self.weekly_reactions = 0
+            self.weekly_comments = 0
+            self.last_weekly_reset = current_week_start
+            self.save(update_fields=[
+                'weekly_points', 'weekly_reactions', 'weekly_comments', 
+                'last_weekly_reset'
+            ])
+    
+    def reset_monthly_if_needed(self):
+        """Reset monthly points if a new month has started"""
+        current_month_start = self.get_month_start()
+        if self.last_monthly_reset < current_month_start:
+            self.monthly_points = 0
+            self.monthly_reactions = 0
+            self.monthly_comments = 0
+            self.last_monthly_reset = current_month_start
+            self.save(update_fields=[
+                'monthly_points', 'monthly_reactions', 'monthly_comments',
+                'last_monthly_reset'
+            ])
+    
+    def add_reaction_points(self):
+        """Add points for a reaction (10 points)"""
+        self.reset_weekly_if_needed()
+        self.reset_monthly_if_needed()
+        
+        self.total_points += 10
+        self.weekly_points += 10
+        self.monthly_points += 10
+        self.total_reactions += 1
+        self.weekly_reactions += 1
+        self.monthly_reactions += 1
+        
+        self.save()
+    
+    def remove_reaction_points(self):
+        """Remove points for a deleted reaction (10 points)"""
+        self.reset_weekly_if_needed()
+        self.reset_monthly_if_needed()
+        
+        self.total_points = max(0, self.total_points - 10)
+        self.weekly_points = max(0, self.weekly_points - 10)
+        self.monthly_points = max(0, self.monthly_points - 10)
+        self.total_reactions = max(0, self.total_reactions - 1)
+        self.weekly_reactions = max(0, self.weekly_reactions - 1)
+        self.monthly_reactions = max(0, self.monthly_reactions - 1)
+        
+        self.save()
+    
+    def add_comment_points(self):
+        """Add points for a comment (30 points)"""
+        self.reset_weekly_if_needed()
+        self.reset_monthly_if_needed()
+        
+        self.total_points += 30
+        self.weekly_points += 30
+        self.monthly_points += 30
+        self.total_comments += 1
+        self.weekly_comments += 1
+        self.monthly_comments += 1
+        
+        self.save()
+    
+    def remove_comment_points(self):
+        """Remove points for a deleted comment (30 points)"""
+        self.reset_weekly_if_needed()
+        self.reset_monthly_if_needed()
+        
+        self.total_points = max(0, self.total_points - 30)
+        self.weekly_points = max(0, self.weekly_points - 30)
+        self.monthly_points = max(0, self.monthly_points - 30)
+        self.total_comments = max(0, self.total_comments - 1)
+        self.weekly_comments = max(0, self.weekly_comments - 1)
+        self.monthly_comments = max(0, self.monthly_comments - 1)
+        
+        self.save()
+
+
+class LeaderboardEntry(models.Model):
+    """Model to store historical leaderboard data"""
+    PERIOD_CHOICES = [
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='leaderboard_entries'
+    )
+    period_type = models.CharField(max_length=10, choices=PERIOD_CHOICES)
+    points = models.PositiveIntegerField()
+    rank = models.PositiveIntegerField()
+    reactions_count = models.PositiveIntegerField(default=0)
+    comments_count = models.PositiveIntegerField(default=0)
+    
+    # Period identification
+    year = models.PositiveIntegerField()
+    week_number = models.PositiveIntegerField(null=True, blank=True)  # For weekly
+    month_number = models.PositiveIntegerField(null=True, blank=True)  # For monthly
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['rank']
+        unique_together = [
+            ('user', 'period_type', 'year', 'week_number'),
+            ('user', 'period_type', 'year', 'month_number'),
+        ]
+        indexes = [
+            models.Index(fields=['period_type', 'year', 'week_number', 'rank']),
+            models.Index(fields=['period_type', 'year', 'month_number', 'rank']),
+        ]
+    
+    def __str__(self):
+        period_str = f"{self.year}-W{self.week_number}" if self.week_number else f"{self.year}-{self.month_number:02d}"
+        return f"{self.user.email} - Rank {self.rank} ({self.period_type} {period_str})"

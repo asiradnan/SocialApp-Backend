@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, F
+from django.db.models import Q, F, Count, Case, When, IntegerField
 from django.db import transaction
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -7,13 +7,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
+from django.contrib.auth import get_user_model
 
-from .models import Post, Comment, PostReaction
+from .models import Post, Comment, PostReaction, UserScore, LeaderboardEntry
 from .serializers import (
     PostSerializer, PostCreateSerializer, PostUpdateSerializer,
-    CommentSerializer, CommentCreateSerializer, PostReactionSerializer
+    CommentSerializer, CommentCreateSerializer, PostReactionSerializer,
+    UserScoreSerializer, LeaderboardSerializer, CurrentLeaderboardSerializer,
+    UserStatsSerializer
 )
+
+User = get_user_model()
 
 
 class PostPagination(PageNumberPagination):
@@ -21,6 +26,13 @@ class PostPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
     max_page_size = 50
+
+
+class LeaderboardPagination(PageNumberPagination):
+    """Custom pagination for leaderboards"""
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 class PostListCreateView(generics.ListCreateAPIView):
@@ -272,6 +284,130 @@ class FeedView(generics.ListAPIView):
         return queryset
 
 
+# Leaderboard Views
+
+class LeaderboardView(generics.ListAPIView):
+    """
+    Get current leaderboard
+    Query params:
+    - period: 'weekly', 'monthly', or 'total' (default)
+    - limit: number of results (default 50)
+    """
+    serializer_class = CurrentLeaderboardSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = LeaderboardPagination
+    
+    def get_queryset(self):
+        period = self.request.query_params.get('period', 'total')
+        limit = int(self.request.query_params.get('limit', 50))
+        
+        # Get all user scores and reset periods if needed
+        user_scores = UserScore.objects.select_related('user').all()
+        
+        # Reset periods for all users if needed
+        for score in user_scores:
+            score.reset_weekly_if_needed()
+            score.reset_monthly_if_needed()
+        
+        # Order by the appropriate field
+        if period == 'weekly':
+            queryset = user_scores.order_by('-weekly_points', '-updated_at')
+        elif period == 'monthly':
+            queryset = user_scores.order_by('-monthly_points', '-updated_at')
+        else:
+            queryset = user_scores.order_by('-total_points', '-updated_at')
+        
+        return queryset[:limit]
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['period_type'] = self.request.query_params.get('period', 'total')
+        return context
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        period_type = request.query_params.get('period', 'total')
+        
+        # Add rank to each item
+        leaderboard_data = []
+        for rank, user_score in enumerate(queryset, 1):
+            context = self.get_serializer_context()
+            context['rank'] = rank
+            serializer = self.get_serializer(user_score, context=context)
+            leaderboard_data.append(serializer.data)
+        
+        return Response({
+            'period': period_type,
+            'count': len(leaderboard_data),
+            'results': leaderboard_data
+        })
+
+
+class UserStatsView(APIView):
+    """Get detailed stats for a specific user"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, user_id=None):
+        # If no user_id provided, use current user
+        if user_id is None:
+            user = request.user
+        else:
+            user = get_object_or_404(User, pk=user_id)
+        
+        # Get or create user score
+        user_score = UserScore.get_or_create_for_user(user)
+        user_score.reset_weekly_if_needed()
+        user_score.reset_monthly_if_needed()
+        
+        # Calculate ranks
+        total_rank = UserScore.objects.filter(total_points__gt=user_score.total_points).count() + 1
+        weekly_rank = UserScore.objects.filter(weekly_points__gt=user_score.weekly_points).count() + 1
+        monthly_rank = UserScore.objects.filter(monthly_points__gt=user_score.monthly_points).count() + 1
+        
+        stats_data = {
+            'user': user,
+            'total_points': user_score.total_points,
+            'weekly_points': user_score.weekly_points,
+            'monthly_points': user_score.monthly_points,
+            'total_rank': total_rank,
+            'weekly_rank': weekly_rank,
+            'monthly_rank': monthly_rank,
+            'total_reactions': user_score.total_reactions,
+            'total_comments': user_score.total_comments,
+            'weekly_reactions': user_score.weekly_reactions,
+            'weekly_comments': user_score.weekly_comments,
+            'monthly_reactions': user_score.monthly_reactions,
+            'monthly_comments': user_score.monthly_comments,
+        }
+        
+        serializer = UserStatsSerializer(stats_data)
+        return Response(serializer.data)
+
+
+class HistoricalLeaderboardView(generics.ListAPIView):
+    """Get historical leaderboard data"""
+    serializer_class = LeaderboardSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = LeaderboardPagination
+    
+    def get_queryset(self):
+        period_type = self.request.query_params.get('period', 'weekly')
+        year = self.request.query_params.get('year')
+        week = self.request.query_params.get('week')
+        month = self.request.query_params.get('month')
+        queryset = LeaderboardEntry.objects.filter(period_type=period_type).select_related('user')
+        
+        if year:
+            queryset = queryset.filter(year=int(year))
+        
+        if period_type == 'weekly' and week:
+            queryset = queryset.filter(week_number=int(week))
+        elif period_type == 'monthly' and month:
+            queryset = queryset.filter(month_number=int(month))
+        
+        return queryset.order_by('rank')
+
+
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def post_reactions_detail(request, post_id):
@@ -362,3 +498,104 @@ def search_posts(request):
     
     serializer = PostSerializer(posts, many=True, context={'request': request})
     return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def save_weekly_leaderboard(request):
+    """Manually save current weekly leaderboard (admin only)"""
+    if request.user.user_type != 'admin':
+        return Response({'error': 'Admin access required'}, status=403)
+    
+    current_date = timezone.now().date()
+    year = current_date.year
+    week_number = current_date.isocalendar()[1]
+    
+    # Get current weekly leaderboard
+    user_scores = UserScore.objects.select_related('user').order_by('-weekly_points')[:100]
+    
+    saved_entries = []
+    for rank, user_score in enumerate(user_scores, 1):
+        if user_score.weekly_points > 0:  # Only save users with points
+            entry, created = LeaderboardEntry.objects.update_or_create(
+                user=user_score.user,
+                period_type='weekly',
+                year=year,
+                week_number=week_number,
+                defaults={
+                    'points': user_score.weekly_points,
+                    'rank': rank,
+                    'reactions_count': user_score.weekly_reactions,
+                    'comments_count': user_score.weekly_comments,
+                }
+            )
+            saved_entries.append(entry)
+    
+    return Response({
+        'message': f'Saved {len(saved_entries)} weekly leaderboard entries',
+        'year': year,
+        'week': week_number
+    })
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def save_monthly_leaderboard(request):
+    """Manually save current monthly leaderboard (admin only)"""
+    if request.user.user_type != 'admin':
+        return Response({'error': 'Admin access required'}, status=403)
+    
+    current_date = timezone.now().date()
+    year = current_date.year
+    month_number = current_date.month
+    
+    # Get current monthly leaderboard
+    user_scores = UserScore.objects.select_related('user').order_by('-monthly_points')[:100]
+    
+    saved_entries = []
+    for rank, user_score in enumerate(user_scores, 1):
+        if user_score.monthly_points > 0:  # Only save users with points
+            entry, created = LeaderboardEntry.objects.update_or_create(
+                user=user_score.user,
+                period_type='monthly',
+                year=year,
+                month_number=month_number,
+                defaults={
+                    'points': user_score.monthly_points,
+                    'rank': rank,
+                    'reactions_count': user_score.monthly_reactions,
+                    'comments_count': user_score.monthly_comments,
+                }
+            )
+            saved_entries.append(entry)
+    
+    return Response({
+        'message': f'Saved {len(saved_entries)} monthly leaderboard entries',
+        'year': year,
+        'month': month_number
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def leaderboard_summary(request):
+    """Get leaderboard summary statistics"""
+    total_users = UserScore.objects.count()
+    active_users_week = UserScore.objects.filter(weekly_points__gt=0).count()
+    active_users_month = UserScore.objects.filter(monthly_points__gt=0).count()
+    
+    # Top performers
+    top_total = UserScore.objects.select_related('user').order_by('-total_points').first()
+    top_weekly = UserScore.objects.select_related('user').order_by('-weekly_points').first()
+    top_monthly = UserScore.objects.select_related('user').order_by('-monthly_points').first()
+    
+    return Response({
+        'total_users': total_users,
+        'active_users_this_week': active_users_week,
+        'active_users_this_month': active_users_month,
+        'top_performers': {
+            'all_time': UserScoreSerializer(top_total).data if top_total else None,
+            'this_week': UserScoreSerializer(top_weekly).data if top_weekly else None,
+            'this_month': UserScoreSerializer(top_monthly).data if top_monthly else None,
+        }
+    })
