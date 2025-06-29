@@ -99,17 +99,32 @@ class PostSerializer(serializers.ModelSerializer):
     can_delete = serializers.SerializerMethodField()
     time_since_created = serializers.SerializerMethodField()
     
+    media_type = serializers.ReadOnlyField()
+    is_image = serializers.ReadOnlyField()
+    is_video = serializers.ReadOnlyField()
+    media_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = Post
         fields = [
             'id', 'author', 'content', 'image', 'created_at', 'updated_at',
             'reactions_count', 'comments_count', 'comments', 'reactions',
-            'user_reaction', 'can_edit', 'can_delete', 'time_since_created'
+            'user_reaction', 'can_edit', 'can_delete', 'time_since_created',
+            'media_type', 'is_image', 'is_video', 'media_url'  # Add these
         ]
         read_only_fields = [
             'id', 'author', 'created_at', 'updated_at', 
             'reactions_count', 'comments_count'
         ]
+    
+    def get_media_url(self, obj):
+        """Get the full URL for the media file"""
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
     
     def get_comments(self, obj):
         """Get top-level comments only (replies are nested within)"""
@@ -182,7 +197,26 @@ class PostCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Post
-        fields = ['content', 'image']
+        fields = ['content', 'image']  # Keep 'image' field name
+    
+    def validate_image(self, value):
+        """Validate that the uploaded file is either an image or video"""
+        if value:
+            import os
+            file_extension = os.path.splitext(value.name)[1].lower()
+            allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.avi', '.webm']
+            
+            if file_extension not in allowed_extensions:
+                raise serializers.ValidationError(
+                    "Only image files (jpg, jpeg, png, gif) and video files (mp4, mov, avi, webm) are allowed."
+                )
+            
+            # Optional: Add file size validation
+            max_size = 50 * 1024 * 1024  # 50MB
+            if value.size > max_size:
+                raise serializers.ValidationError("File size cannot exceed 50MB.")
+        
+        return value
     
     def create(self, validated_data):
         validated_data['author'] = self.context['request'].user
@@ -195,6 +229,25 @@ class PostUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = ['content', 'image']
+    
+    def validate_image(self, value):
+        """Validate that the uploaded file is either an image or video"""
+        if value:
+            import os
+            file_extension = os.path.splitext(value.name)[1].lower()
+            allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.avi', '.webm']
+            
+            if file_extension not in allowed_extensions:
+                raise serializers.ValidationError(
+                    "Only image files (jpg, jpeg, png, gif) and video files (mp4, mov, avi, webm) are allowed."
+                )
+            
+            # Optional: Add file size validation
+            max_size = 50 * 1024 * 1024  # 50MB
+            if value.size > max_size:
+                raise serializers.ValidationError("File size cannot exceed 50MB.")
+        
+        return value
     
     def validate(self, data):
         """Ensure user can only update their own posts"""

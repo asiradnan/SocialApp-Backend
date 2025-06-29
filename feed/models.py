@@ -1,8 +1,9 @@
 from django.db import models
 from django.conf import settings
-from django.core.validators import MinLengthValidator
+from django.core.validators import MinLengthValidator, FileExtensionValidator
 from django.utils import timezone
 from datetime import datetime, timedelta
+import os
 
 
 class Post(models.Model):
@@ -15,10 +16,16 @@ class Post(models.Model):
         max_length=2000,
         validators=[MinLengthValidator(1)]
     )
-    image = models.ImageField(
-        upload_to='posts/images/', 
+    # Rename to 'media' but keep the field name as 'image' for backward compatibility
+    image = models.FileField(
+        upload_to='posts/media/', 
         blank=True, 
-        null=True
+        null=True,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm']
+            )
+        ]
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -33,6 +40,32 @@ class Post(models.Model):
     
     def __str__(self):
         return f"{self.author.email} - {self.content[:50]}"
+    
+    @property
+    def media_type(self):
+        """Determine if the uploaded file is an image or video"""
+        if not self.image:
+            return None
+        
+        file_extension = os.path.splitext(self.image.name)[1].lower()
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif']
+        video_extensions = ['.mp4', '.mov', '.avi', '.webm']
+        
+        if file_extension in image_extensions:
+            return 'image'
+        elif file_extension in video_extensions:
+            return 'video'
+        return 'unknown'
+    
+    @property
+    def is_image(self):
+        """Check if the media is an image"""
+        return self.media_type == 'image'
+    
+    @property
+    def is_video(self):
+        """Check if the media is a video"""
+        return self.media_type == 'video'
 
 
 class Comment(models.Model):
