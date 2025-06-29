@@ -54,3 +54,69 @@ class UserProfileSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+    
+    
+class GoogleAuthSerializer(serializers.Serializer):
+    idToken = serializers.CharField(required=True)
+    email = serializers.EmailField(required=True)
+    name = serializers.CharField(required=True)
+    
+    def validate_email(self, value):
+        return value.lower()
+
+class GoogleSignupSerializer(serializers.Serializer):
+    idToken = serializers.CharField(required=True)
+    email = serializers.EmailField(required=True)
+    firstName = serializers.CharField(required=True, max_length=150)
+    lastName = serializers.CharField(required=True, max_length=150)
+    gender = serializers.CharField(required=True, max_length=10)
+    dateOfBirth = serializers.DateField(required=True)
+    userType = serializers.CharField(required=False, default='standard')
+    
+    def validate_email(self, value):
+        return value.lower()
+    
+    def validate_gender(self, value):
+        valid_genders = ['male', 'female', 'other', 'prefer not to say']
+        if value.lower() not in valid_genders:
+            # Map common variations
+            gender_mapping = {
+                'male': 'male',
+                'female': 'female',
+                'other': 'other',
+                'prefer not to say': 'other'
+            }
+            return gender_mapping.get(value.lower(), 'other')
+        return value.lower()
+    
+    def validate_userType(self, value):
+        valid_types = ['instructor', 'standard', 'admin']
+        if value not in valid_types:
+            return 'standard'  # Default to standard if invalid
+        return value
+    
+    def validate(self, data):
+        # Check if user already exists
+        email = data.get('email')
+        if CustomUser.objects.filter(email=email).exists():
+            raise serializers.ValidationError("User with this email already exists.")
+        return data
+    
+    def create(self, validated_data):
+        # Remove idToken as it's not needed for user creation
+        validated_data.pop('idToken', None)
+        
+        # Create user without password (Google authenticated)
+        user = CustomUser(
+            email=validated_data['email'],
+            first_name=validated_data['firstName'],
+            last_name=validated_data['lastName'],
+            gender=validated_data['gender'],
+            date_of_birth=validated_data['dateOfBirth'],
+            user_type=validated_data.get('userType', 'standard'),
+            is_active=True
+        )
+        # Set unusable password for Google users
+        user.set_unusable_password()
+        user.save()
+        return user

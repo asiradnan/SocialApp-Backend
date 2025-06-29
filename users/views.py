@@ -5,9 +5,15 @@ from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
 from rest_framework_simplejwt.tokens import RefreshToken
+import logging
+from django.conf import settings
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
-from .serializers import RegisterSerializer, LoginSerializer, UserProfileSerializer
+from .serializers import RegisterSerializer, LoginSerializer, UserProfileSerializer, GoogleAuthSerializer, GoogleSignupSerializer
 from .models import CustomUser
+
+logger = logging.getLogger(__name__)
 
 
 class RegisterView(APIView):
@@ -106,3 +112,147 @@ class PasswordView(APIView):
             'access': str(refresh.access_token)
         }, status=status.HTTP_200_OK)
     
+
+class GoogleAuthView(APIView):
+    """
+    Handle Google authentication for existing users
+    """
+    def post(self, request):
+        serializer = GoogleAuthSerializer(data=request.data)
+        if serializer.is_valid():
+            id_token_str = serializer.validated_data['idToken']
+            email = serializer.validated_data['email']
+            
+            try:
+                # Verify the Google ID token
+                idinfo = id_token.verify_oauth2_token(
+                    id_token_str, 
+                    requests.Request(), 
+                    settings.GOOGLE_CLIENT_ID
+                )
+                
+                # Verify the token is for our app
+                if idinfo['aud'] != settings.GOOGLE_CLIENT_ID:
+                    return Response({
+                        'error': 'Invalid token audience'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check if the email from token matches the provided email
+                if idinfo['email'] != email:
+                    return Response({
+                        'error': 'Token email does not match provided email'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Verify email is verified by Google
+                if not idinfo.get('email_verified', False):
+                    return Response({
+                        'error': 'Google email not verified'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check if user exists
+                try:
+                    user = CustomUser.objects.get(email=email)
+                    
+                    # Generate tokens
+                    refresh = RefreshToken.for_user(user)
+                    update_last_login(None, user)
+                    
+                    return Response({
+                        'refresh': str(refresh),
+                        'access': str(refresh.access_token),
+                        'user_id': str(user.id),
+                        'email': user.email,
+                        'message': 'Google authentication successful'
+                    }, status=status.HTTP_200_OK)
+                    
+                except CustomUser.DoesNotExist:
+                    return Response({
+                        'error': 'User not found. Please sign up first.',
+                        'requires_signup': True
+                    }, status=status.HTTP_404_NOT_FOUND)
+                    
+            except ValueError as e:
+                logger.error(f"Google token verification failed: {str(e)}")
+                return Response({
+                    'error': 'Invalid Google token'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                logger.error(f"Google authentication error: {str(e)}")
+                return Response({
+                    'error': 'Google authentication failed'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GoogleSignupView(APIView):
+    """
+    Handle Google signup for new users
+    """
+    def post(self, request):
+        serializer = GoogleSignupSerializer(data=request.data)
+        if serializer.is_valid():
+            id_token_str = serializer.validated_data['idToken']
+            email = serializer.validated_data['email']
+            
+            try:
+                # Verify the Google ID token
+                idinfo = id_token.verify_oauth2_token(
+                    id_token_str, 
+                    requests.Request(), 
+                    settings.GOOGLE_CLIENT_ID
+                )
+                
+                # Verify the token is for our app
+                if idinfo['aud'] != settings.GOOGLE_CLIENT_ID:
+                    return Response({
+                        'error': 'Invalid token audience'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check if the email from token matches the provided email
+                if idinfo['email'] != email:
+                    return Response({
+                        'error': 'Token email does not match provided email'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Verify email is verified by Google
+                if not idinfo.get('email_verified', False):
+                    return Response({
+                        'error': 'Google email not verified'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check if user already exists
+                if CustomUser.objects.filter(email=email).exists():
+                    return Response({
+                        'error': 'User with this email already exists. Please sign in instead.',
+                        'user_exists': True
+                    }, status=status.HTTP_409_CONFLICT)
+                
+                # Create the user
+                user = serializer.save()
+                
+                # Generate tokens
+                refresh = RefreshToken.for_user(user)
+                
+                logger.info(f"New Google user created: {user.email}")
+                
+                return Response({
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'user_id': str(user.id),
+                    'email': user.email,
+                    'message': 'Google signup successful'
+                }, status=status.HTTP_201_CREATED)
+                
+            except ValueError as e:
+                logger.error(f"Google token verification failed: {str(e)}")
+                return Response({
+                    'error': 'Invalid Google token'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                logger.error(f"Google signup error: {str(e)}")
+                return Response({
+                    'error': 'Google signup failed'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
