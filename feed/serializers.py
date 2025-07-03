@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from .models import Post, Comment, PostReaction, UserScore, LeaderboardEntry
+from .models import Post, Comment, PostReaction, UserScore, LeaderboardEntry, Poll, PollOption, PollVote
 
 User = get_user_model()
 
@@ -17,6 +17,198 @@ class AuthorSerializer(serializers.ModelSerializer):
     
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip()
+
+
+class PollOptionSerializer(serializers.ModelSerializer):
+    """Serializer for poll options"""
+    vote_percentage = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = PollOption
+        fields = ['id', 'text', 'votes_count', 'vote_percentage']
+        read_only_fields = ['id', 'votes_count']
+    
+    def get_vote_percentage(self, obj):
+        """Calculate vote percentage for this option"""
+        if obj.poll.total_votes == 0:
+            return 0
+        return round((obj.votes_count / obj.poll.total_votes) * 100, 1)
+
+
+class PollSerializer(serializers.ModelSerializer):
+    """Serializer for polls"""
+    author = AuthorSerializer(read_only=True)
+    options = PollOptionSerializer(many=True, read_only=True)
+    user_vote = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+    time_since_created = serializers.SerializerMethodField()
+    media_type = serializers.ReadOnlyField()
+    is_image = serializers.ReadOnlyField()
+    is_video = serializers.ReadOnlyField()
+    media_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Poll
+        fields = [
+            'id', 'author', 'question', 'media', 'created_at', 'updated_at',
+            'total_votes', 'options', 'user_vote', 'can_edit', 'can_delete',
+            'time_since_created', 'media_type', 'is_image', 'is_video', 'media_url'
+        ]
+        read_only_fields = ['id', 'author', 'created_at', 'updated_at', 'total_votes']
+    
+    def get_media_url(self, obj):
+        """Get the full URL for the media file"""
+        if obj.media:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.media.url)
+            return obj.media.url
+        return None
+    
+    def get_user_vote(self, obj):
+        """Get current user's vote for this poll"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        
+        try:
+            vote = obj.votes.get(user=request.user)
+            return {
+                'option_id': vote.option.id,
+                'option_text': vote.option.text
+            }
+        except PollVote.DoesNotExist:
+            return None
+    
+    def get_can_edit(self, obj):
+        """Check if current user can edit this poll"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.author == request.user
+    
+    def get_can_delete(self, obj):
+        """Check if current user can delete this poll"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.author == request.user or request.user.user_type == 'admin'
+    
+    def get_time_since_created(self, obj):
+        """Get human-readable time since poll creation"""
+        from django.utils.timesince import timesince
+        return timesince(obj.created_at)
+
+
+class PollCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating polls"""
+    options = serializers.ListField(
+        child=serializers.CharField(max_length=200),
+        min_length=2,
+        max_length=10,
+        write_only=True
+    )
+    
+    class Meta:
+        model = Poll
+        fields = ['question', 'media', 'options']
+    
+    def validate_media(self, value):
+        """Validate that the uploaded file is either an image or video"""
+        if value:
+            import os
+            file_extension = os.path.splitext(value.name)[1].lower()
+            allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.avi', '.webm']
+            
+            if file_extension not in allowed_extensions:
+                raise serializers.ValidationError(
+                    "Only image files (jpg, jpeg, png, gif) and video files (mp4, mov, avi, webm) are allowed."
+                )
+            
+            max_size = 50 * 1024 * 1024  # 50MB
+            if value.size > max_size:
+                raise serializers.ValidationError("File size cannot exceed 50MB.")
+        
+        return value
+    
+    def validate_options(self, value):
+        """Validate poll options"""
+        if len(value) < 2:
+            raise serializers.ValidationError("Poll must have at least 2 options.")
+        if len(value) > 10:
+            raise serializers.ValidationError("Poll cannot have more than 10 options.")
+        
+        # Remove duplicates and empty options
+        cleaned_options = []
+        for option in value:
+            option = option.strip()
+            if option and option not in cleaned_options:
+                cleaned_options.append(option)
+        
+        if len(cleaned_options) < 2:
+            raise serializers.ValidationError("Poll must have at least 2 unique, non-empty options.")
+        
+        return cleaned_options
+    
+    def create(self, validated_data):
+        options_data = validated_data.pop('options')
+        validated_data['author'] = self.context['request'].user
+        
+        poll = Poll.objects.create(**validated_data)
+        
+        # Create poll options
+        for option_text in options_data:
+            PollOption.objects.create(poll=poll, text=option_text)
+        
+        return poll
+
+
+class PollUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating polls (only question and media)"""
+    
+    class Meta:
+        model = Poll
+        fields = ['question', 'media']
+    
+    def validate_media(self, value):
+        """Validate that the uploaded file is either an image or video"""
+        if value:
+            import os
+            file_extension = os.path.splitext(value.name)[1].lower()
+            allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.avi', '.webm']
+            
+            if file_extension not in allowed_extensions:
+                raise serializers.ValidationError(
+                    "Only image files (jpg, jpeg, png, gif) and video files (mp4, mov, avi, webm) are allowed."
+                )
+            
+            max_size = 50 * 1024 * 1024  # 50MB
+            if value.size > max_size:
+                raise serializers.ValidationError("File size cannot exceed 50MB.")
+        
+        return value
+    
+    def validate(self, data):
+        """Ensure user can only update their own polls"""
+        request = self.context.get('request')
+        if request and request.user != self.instance.author:
+            raise serializers.ValidationError("You can only edit your own polls.")
+        return data
+
+
+class FeedItemSerializer(serializers.Serializer):
+    """Serializer for combined feed items (posts and polls)"""
+    type = serializers.CharField()
+    data = serializers.SerializerMethodField()
+    
+    def get_data(self, obj):
+        """Serialize the actual object based on its type"""
+        if obj['type'] == 'post':
+            return PostSerializer(obj['object'], context=self.context).data
+        elif obj['type'] == 'poll':
+            return PollSerializer(obj['object'], context=self.context).data
+        return None
 
 
 class PostReactionSerializer(serializers.ModelSerializer):

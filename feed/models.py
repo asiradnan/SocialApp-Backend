@@ -68,6 +68,114 @@ class Post(models.Model):
         return self.media_type == 'video'
 
 
+class Poll(models.Model):
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='polls'
+    )
+    question = models.TextField(
+        max_length=500,
+        validators=[MinLengthValidator(1)]
+    )
+    media = models.FileField(
+        upload_to='polls/media/',
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm']
+            )
+        ]
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    
+    # Denormalized field for performance
+    total_votes = models.PositiveIntegerField(default=0)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.author.email} - {self.question[:50]}"
+    
+    @property
+    def media_type(self):
+        """Determine if the uploaded file is an image or video"""
+        if not self.media:
+            return None
+        
+        file_extension = os.path.splitext(self.media.name)[1].lower()
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif']
+        video_extensions = ['.mp4', '.mov', '.avi', '.webm']
+        
+        if file_extension in image_extensions:
+            return 'image'
+        elif file_extension in video_extensions:
+            return 'video'
+        return 'unknown'
+    
+    @property
+    def is_image(self):
+        """Check if the media is an image"""
+        return self.media_type == 'image'
+    
+    @property
+    def is_video(self):
+        """Check if the media is a video"""
+        return self.media_type == 'video'
+
+
+class PollOption(models.Model):
+    poll = models.ForeignKey(
+        Poll,
+        on_delete=models.CASCADE,
+        related_name='options'
+    )
+    text = models.CharField(
+        max_length=200,
+        validators=[MinLengthValidator(1)]
+    )
+    votes_count = models.PositiveIntegerField(default=0)
+    
+    class Meta:
+        ordering = ['id']
+    
+    def __str__(self):
+        return f"{self.poll.question[:30]} - {self.text}"
+
+
+class PollVote(models.Model):
+    poll = models.ForeignKey(
+        Poll,
+        on_delete=models.CASCADE,
+        related_name='votes'
+    )
+    option = models.ForeignKey(
+        PollOption,
+        on_delete=models.CASCADE,
+        related_name='votes'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='poll_votes'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('poll', 'user')  # One vote per user per poll
+        indexes = [
+            models.Index(fields=['poll', 'option']),
+            models.Index(fields=['user', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} voted for {self.option.text} in poll {self.poll.id}"
+
+
 class Comment(models.Model):
     post = models.ForeignKey(
         Post, 
@@ -295,7 +403,6 @@ class UserScore(models.Model):
         
         self.save()
 
-
 class LeaderboardEntry(models.Model):
     """Model to store historical leaderboard data"""
     PERIOD_CHOICES = [
@@ -335,3 +442,30 @@ class LeaderboardEntry(models.Model):
     def __str__(self):
         period_str = f"{self.year}-W{self.week_number}" if self.week_number else f"{self.year}-{self.month_number:02d}"
         return f"{self.user.email} - Rank {self.rank} ({self.period_type} {period_str})"
+
+
+# Utility function to get combined feed (posts and polls ordered by creation time)
+def get_combined_feed():
+    """
+    Get combined feed of posts and polls ordered by creation time.
+    Returns a list of dictionaries with 'type' and 'object' keys.
+    """
+    from itertools import chain
+    from operator import attrgetter
+    
+    posts = Post.objects.filter(is_active=True).select_related('author')
+    polls = Poll.objects.filter(is_active=True).select_related('author').prefetch_related('options')
+    
+    # Add type identifier to each object
+    post_items = [{'type': 'post', 'object': post, 'created_at': post.created_at} for post in posts]
+    poll_items = [{'type': 'poll', 'object': poll, 'created_at': poll.created_at} for poll in polls]
+    
+    # Combine and sort by creation time (newest first)
+    combined_feed = sorted(
+        chain(post_items, poll_items),
+        key=lambda x: x['created_at'],
+        reverse=True
+    )
+    
+    return combined_feed
+

@@ -9,13 +9,16 @@ from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.contrib.auth import get_user_model
+from itertools import chain
+from operator import attrgetter
 
-from .models import Post, Comment, PostReaction, UserScore, LeaderboardEntry
+from .models import Post, Comment, PostReaction, UserScore, LeaderboardEntry, Poll, PollOption, PollVote, get_combined_feed
 from .serializers import (
     PostSerializer, PostCreateSerializer, PostUpdateSerializer,
     CommentSerializer, CommentCreateSerializer, PostReactionSerializer,
     UserScoreSerializer, LeaderboardSerializer, CurrentLeaderboardSerializer,
-    UserStatsSerializer
+    UserStatsSerializer, PollSerializer, PollCreateSerializer, PollUpdateSerializer,
+    PollOptionSerializer, FeedItemSerializer
 )
 
 User = get_user_model()
@@ -34,6 +37,190 @@ class LeaderboardPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 100
 
+
+# Poll Views
+
+class PollListCreateView(generics.ListCreateAPIView):
+    """
+    GET: List all polls with pagination
+    POST: Create a new poll
+    """
+    serializer_class = PollSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = PostPagination
+    
+    def get_queryset(self):
+        queryset = Poll.objects.filter(is_active=True).select_related('author').prefetch_related('options', 'votes')
+        
+        # Filter by author if specified
+        author_id = self.request.query_params.get('author_id')
+        if author_id:
+            queryset = queryset.filter(author_id=author_id)
+        
+        # Search functionality
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(question__icontains=search) | 
+                Q(author__first_name__icontains=search) |
+                Q(author__last_name__icontains=search)
+            )
+        
+        return queryset
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return PollCreateSerializer
+        return PollSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
+
+class PollDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET: Retrieve a specific poll
+    PUT/PATCH: Update a poll (only by author)
+    DELETE: Delete a poll (only by author or admin)
+    """
+    queryset = Poll.objects.filter(is_active=True)
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return PollUpdateSerializer
+        return PollSerializer
+    
+    def get_object(self):
+        obj = get_object_or_404(Poll, pk=self.kwargs['pk'], is_active=True)
+        return obj
+    
+    def perform_update(self, serializer):
+        poll = self.get_object()
+        if poll.author != self.request.user:
+            raise permissions.PermissionDenied("You can only edit your own polls.")
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        if instance.author != self.request.user and self.request.user.user_type != 'admin':
+            raise permissions.PermissionDenied("You can only delete your own polls.")
+        # Soft delete
+        instance.is_active = False
+        instance.save()
+
+
+class PollVoteView(APIView):
+    """
+    POST: Vote on a poll
+    DELETE: Remove vote from a poll
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, poll_id):
+        poll = get_object_or_404(Poll, pk=poll_id, is_active=True)
+        option_id = request.data.get('option_id')
+        
+        if not option_id:
+            return Response(
+                {'error': 'option_id is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            option = poll.options.get(id=option_id)
+        except PollOption.DoesNotExist:
+            return Response(
+                {'error': 'Invalid option_id'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        with transaction.atomic():
+            # Check if user already voted
+            existing_vote = PollVote.objects.filter(poll=poll, user=request.user).first()
+            
+            if existing_vote:
+                # Update existing vote
+                old_option = existing_vote.option
+                if old_option.id != option.id:
+                    # Decrement old option count
+                    PollOption.objects.filter(pk=old_option.pk).update(
+                        votes_count=F('votes_count') - 1
+                    )
+                    # Increment new option count
+                    PollOption.objects.filter(pk=option.pk).update(
+                        votes_count=F('votes_count') + 1
+                    )
+                    # Update vote
+                    existing_vote.option = option
+                    existing_vote.save()
+                    
+                    return Response({
+                        'message': 'Vote updated successfully',
+                        'option_id': option.id,
+                        'option_text': option.text
+                    })
+                else:
+                    return Response(
+                        {'message': 'You have already voted for this option'}, 
+                        status=status.HTTP_200_OK
+                    )
+            else:
+                # Create new vote
+                PollVote.objects.create(poll=poll, option=option, user=request.user)
+                # Increment option count
+                PollOption.objects.filter(pk=option.pk).update(
+                    votes_count=F('votes_count') + 1
+                )
+                # Increment total votes
+                Poll.objects.filter(pk=poll.pk).update(
+                    total_votes=F('total_votes') + 1
+                )
+                
+                return Response({
+                    'message': 'Vote cast successfully',
+                    'option_id': option.id,
+                    'option_text': option.text
+                }, status=status.HTTP_201_CREATED)
+    
+    def delete(self, request, poll_id):
+        poll = get_object_or_404(Poll, pk=poll_id, is_active=True)
+        
+        try:
+            vote = PollVote.objects.get(poll=poll, user=request.user)
+            with transaction.atomic():
+                # Decrement option count
+                PollOption.objects.filter(pk=vote.option.pk).update(
+                    votes_count=F('votes_count') - 1
+                )
+                # Decrement total votes
+                Poll.objects.filter(pk=poll.pk).update(
+                    total_votes=F('total_votes') - 1
+                )
+                vote.delete()
+            
+            return Response({'message': 'Vote removed successfully'}, status=status.HTTP_204_NO_CONTENT)
+        except PollVote.DoesNotExist:
+            return Response(
+                {'error': 'Vote not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class UserPollsView(generics.ListAPIView):
+    """Get all polls by a specific user"""
+    serializer_class = PollSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = PostPagination
+    
+    def get_queryset(self):
+        user_id = self.kwargs['user_id']
+        return Poll.objects.filter(
+            author_id=user_id, 
+            is_active=True
+        ).select_related('author').prefetch_related('options', 'votes')
+
+
+# Post Views (existing)
 
 class PostListCreateView(generics.ListCreateAPIView):
     """
@@ -252,39 +439,67 @@ class UserPostsView(generics.ListAPIView):
         ).select_related('author').prefetch_related('reactions', 'comments')
 
 
+# Combined Feed View
+
 class FeedView(generics.ListAPIView):
     """
-    Get personalized feed for the current user
-    This could be enhanced with following/friends logic
+    Get combined feed of posts and polls ordered by creation time
     """
-    serializer_class = PostSerializer
+    serializer_class = FeedItemSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = PostPagination
     
     def get_queryset(self):
-        # For now, return all posts. You can enhance this with:
-        # - Posts from followed users
-        # - Posts from friends
-        # - Trending posts
-        # - Posts based on user interests
-        
-        queryset = Post.objects.filter(is_active=True).select_related('author').prefetch_related(
+        # Get posts and polls
+        posts = Post.objects.filter(is_active=True).select_related('author').prefetch_related(
             'reactions', 'comments__author'
+        )
+        polls = Poll.objects.filter(is_active=True).select_related('author').prefetch_related(
+            'options', 'votes'
         )
         
         # Optional: Filter by time range
         time_filter = self.request.query_params.get('time_filter')
         if time_filter == 'today':
-            queryset = queryset.filter(created_at__gte=timezone.now() - timedelta(days=1))
+            time_threshold = timezone.now() - timedelta(days=1)
+            posts = posts.filter(created_at__gte=time_threshold)
+            polls = polls.filter(created_at__gte=time_threshold)
         elif time_filter == 'week':
-            queryset = queryset.filter(created_at__gte=timezone.now() - timedelta(weeks=1))
+            time_threshold = timezone.now() - timedelta(weeks=1)
+            posts = posts.filter(created_at__gte=time_threshold)
+            polls = polls.filter(created_at__gte=time_threshold)
         elif time_filter == 'month':
-            queryset = queryset.filter(created_at__gte=timezone.now() - timedelta(days=30))
+            time_threshold = timezone.now() - timedelta(days=30)
+            posts = posts.filter(created_at__gte=time_threshold)
+            polls = polls.filter(created_at__gte=time_threshold)
         
-        return queryset
+        # Create feed items
+        post_items = [{'type': 'post', 'object': post, 'created_at': post.created_at} for post in posts]
+        poll_items = [{'type': 'poll', 'object': poll, 'created_at': poll.created_at} for poll in polls]
+        
+        # Combine and sort by creation time (newest first)
+        combined_feed = sorted(
+            chain(post_items, poll_items),
+            key=lambda x: x['created_at'],
+            reverse=True
+        )
+        
+        return combined_feed
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        
+        # Apply pagination manually since we're working with a list
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 
-# Leaderboard Views
+# Leaderboard Views (existing)
 
 class LeaderboardView(generics.ListAPIView):
     """
@@ -442,6 +657,39 @@ def post_reactions_detail(request, post_id):
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
+def poll_votes_detail(request, poll_id):
+    """Get detailed vote information for a poll"""
+    poll = get_object_or_404(Poll, pk=poll_id, is_active=True)
+    votes = PollVote.objects.filter(poll=poll).select_related('user', 'option')
+    
+    # Group votes by option
+    vote_groups = {}
+    for vote in votes:
+        option_id = vote.option.id
+        if option_id not in vote_groups:
+            vote_groups[option_id] = {
+                'option_text': vote.option.text,
+                'votes_count': 0,
+                'users': []
+            }
+        vote_groups[option_id]['votes_count'] += 1
+        vote_groups[option_id]['users'].append({
+            'id': vote.user.id,
+            'email': vote.user.email,
+            'full_name': f"{vote.user.first_name} {vote.user.last_name}".strip(),
+            'user_type': vote.user.user_type
+        })
+    
+    return Response({
+        'poll_id': poll.id,
+        'question': poll.question,
+        'total_votes': poll.total_votes,
+        'votes': vote_groups
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
 def trending_posts(request):
     """Get trending posts based on recent activity"""
     # Posts with high engagement in the last 24 hours
@@ -457,6 +705,23 @@ def trending_posts(request):
     ).order_by('-engagement_score', '-created_at')[:20]
     
     serializer = PostSerializer(trending, many=True, context={'request': request})
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def trending_polls(request):
+    """Get trending polls based on recent voting activity"""
+    # Polls with high vote count in the last 24 hours
+    since = timezone.now() - timedelta(hours=24)
+    
+    trending = Poll.objects.filter(
+        is_active=True,
+        created_at__gte=since,
+        total_votes__gt=0
+    ).order_by('-total_votes', '-created_at')[:20]
+    
+    serializer = PollSerializer(trending, many=True, context={'request': request})
     return Response(serializer.data)
 
 
@@ -497,6 +762,46 @@ def search_posts(request):
     posts = posts.select_related('author').prefetch_related('reactions')[:50]
     
     serializer = PostSerializer(posts, many=True, context={'request': request})
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def search_polls(request):
+    """Advanced search for polls"""
+    query = request.GET.get('q', '')
+    author = request.GET.get('author', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    
+    if not query and not author:
+        return Response({'error': 'Search query or author is required'}, status=400)
+    
+    polls = Poll.objects.filter(is_active=True)
+    
+    if query:
+        polls = polls.filter(
+            Q(question__icontains=query) |
+            Q(author__first_name__icontains=query) |
+            Q(author__last_name__icontains=query)
+        )
+    
+    if author:
+        polls = polls.filter(
+            Q(author__first_name__icontains=author) |
+            Q(author__last_name__icontains=author) |
+            Q(author__email__icontains=author)
+        )
+    
+    if date_from:
+        polls = polls.filter(created_at__gte=date_from)
+    
+    if date_to:
+        polls = polls.filter(created_at__lte=date_to)
+    
+    polls = polls.select_related('author').prefetch_related('options', 'votes')[:50]
+    
+    serializer = PollSerializer(polls, many=True, context={'request': request})
     return Response(serializer.data)
 
 
@@ -599,3 +904,27 @@ def leaderboard_summary(request):
             'this_month': UserScoreSerializer(top_monthly).data if top_monthly else None,
         }
     })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def feed_stats(request):
+    """Get feed statistics"""
+    total_posts = Post.objects.filter(is_active=True).count()
+    total_polls = Poll.objects.filter(is_active=True).count()
+    
+    # Recent activity (last 24 hours)
+    since = timezone.now() - timedelta(hours=24)
+    recent_posts = Post.objects.filter(is_active=True, created_at__gte=since).count()
+    recent_polls = Poll.objects.filter(is_active=True, created_at__gte=since).count()
+    
+    return Response({
+        'total_posts': total_posts,
+        'total_polls': total_polls,
+        'total_feed_items': total_posts + total_polls,
+        'recent_posts_24h': recent_posts,
+        'recent_polls_24h': recent_polls,
+        'recent_activity_24h': recent_posts + recent_polls,
+    })
+
+
