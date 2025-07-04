@@ -688,42 +688,6 @@ def poll_votes_detail(request, poll_id):
     })
 
 
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def trending_posts(request):
-    """Get trending posts based on recent activity"""
-    # Posts with high engagement in the last 24 hours
-    since = timezone.now() - timedelta(hours=24)
-    
-    trending = Post.objects.filter(
-        is_active=True,
-        created_at__gte=since
-    ).annotate(
-        engagement_score=F('reactions_count') + F('comments_count')
-    ).filter(
-        engagement_score__gt=0
-    ).order_by('-engagement_score', '-created_at')[:20]
-    
-    serializer = PostSerializer(trending, many=True, context={'request': request})
-    return Response(serializer.data)
-
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def trending_polls(request):
-    """Get trending polls based on recent voting activity"""
-    # Polls with high vote count in the last 24 hours
-    since = timezone.now() - timedelta(hours=24)
-    
-    trending = Poll.objects.filter(
-        is_active=True,
-        created_at__gte=since,
-        total_votes__gt=0
-    ).order_by('-total_votes', '-created_at')[:20]
-    
-    serializer = PollSerializer(trending, many=True, context={'request': request})
-    return Response(serializer.data)
-
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
@@ -803,83 +767,6 @@ def search_polls(request):
     
     serializer = PollSerializer(polls, many=True, context={'request': request})
     return Response(serializer.data)
-
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def save_weekly_leaderboard(request):
-    """Manually save current weekly leaderboard (admin only)"""
-    if request.user.user_type != 'admin':
-        return Response({'error': 'Admin access required'}, status=403)
-    
-    current_date = timezone.now().date()
-    year = current_date.year
-    week_number = current_date.isocalendar()[1]
-    
-    # Get current weekly leaderboard
-    user_scores = UserScore.objects.select_related('user').order_by('-weekly_points')[:100]
-    
-    saved_entries = []
-    for rank, user_score in enumerate(user_scores, 1):
-        if user_score.weekly_points > 0:  # Only save users with points
-            entry, created = LeaderboardEntry.objects.update_or_create(
-                user=user_score.user,
-                period_type='weekly',
-                year=year,
-                week_number=week_number,
-                defaults={
-                    'points': user_score.weekly_points,
-                    'rank': rank,
-                    'reactions_count': user_score.weekly_reactions,
-                    'comments_count': user_score.weekly_comments,
-                }
-            )
-            saved_entries.append(entry)
-    
-    return Response({
-        'message': f'Saved {len(saved_entries)} weekly leaderboard entries',
-        'year': year,
-        'week': week_number
-    })
-
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def save_monthly_leaderboard(request):
-    """Manually save current monthly leaderboard (admin only)"""
-    if request.user.user_type != 'admin':
-        return Response({'error': 'Admin access required'}, status=403)
-    
-    current_date = timezone.now().date()
-    year = current_date.year
-    month_number = current_date.month
-    
-    # Get current monthly leaderboard
-    user_scores = UserScore.objects.select_related('user').order_by('-monthly_points')[:100]
-    
-    saved_entries = []
-    for rank, user_score in enumerate(user_scores, 1):
-        if user_score.monthly_points > 0:  # Only save users with points
-            entry, created = LeaderboardEntry.objects.update_or_create(
-                user=user_score.user,
-                period_type='monthly',
-                year=year,
-                month_number=month_number,
-                defaults={
-                    'points': user_score.monthly_points,
-                    'rank': rank,
-                    'reactions_count': user_score.monthly_reactions,
-                    'comments_count': user_score.monthly_comments,
-                }
-            )
-            saved_entries.append(entry)
-    
-    return Response({
-        'message': f'Saved {len(saved_entries)} monthly leaderboard entries',
-        'year': year,
-        'month': month_number
-    })
-
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])

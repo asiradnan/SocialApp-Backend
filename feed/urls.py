@@ -25,8 +25,6 @@ urlpatterns = [
     path('feed/stats/', views.feed_stats, name='feed-stats'),
     
     # Search and Trending URLs
-    path('trending/posts/', views.trending_posts, name='trending-posts'),
-    path('trending/polls/', views.trending_polls, name='trending-polls'),
     path('search/posts/', views.search_posts, name='search-posts'),
     path('search/polls/', views.search_polls, name='search-polls'),
     
@@ -34,8 +32,6 @@ urlpatterns = [
     path('leaderboard/', views.LeaderboardView.as_view(), name='leaderboard'),
     path('leaderboard/historical/', views.HistoricalLeaderboardView.as_view(), name='historical-leaderboard'),
     path('leaderboard/summary/', views.leaderboard_summary, name='leaderboard-summary'),
-    path('leaderboard/save-weekly/', views.save_weekly_leaderboard, name='save-weekly-leaderboard'),
-    path('leaderboard/save-monthly/', views.save_monthly_leaderboard, name='save-monthly-leaderboard'),
     
     # User Stats URLs
     path('users/<int:user_id>/stats/', views.UserStatsView.as_view(), name='user-stats'),
