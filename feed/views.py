@@ -396,12 +396,6 @@ class PostReactionView(APIView):
                 user=request.user,
                 defaults={'reaction_type': reaction_type}
             )
-            
-            if created:
-                # Increment reaction count
-                Post.objects.filter(pk=post.pk).update(
-                    reactions_count=F('reactions_count') + 1
-                )
         
         serializer = PostReactionSerializer(reaction, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -411,11 +405,7 @@ class PostReactionView(APIView):
         
         try:
             reaction = PostReaction.objects.get(post=post, user=request.user)
-            with transaction.atomic():
-                reaction.delete()
-                Post.objects.filter(pk=post.pk).update(
-                    reactions_count=F('reactions_count') - 1
-                )
+            reaction.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except PostReaction.DoesNotExist:
             return Response(
