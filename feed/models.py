@@ -272,13 +272,16 @@ class UserScore(models.Model):
     last_weekly_reset = models.DateTimeField(default=timezone.now)
     last_monthly_reset = models.DateTimeField(default=timezone.now)
     
-    # Activity counts
+    # Activity counts - ADD POLL VOTES
     total_reactions = models.PositiveIntegerField(default=0)
     total_comments = models.PositiveIntegerField(default=0)
+    total_poll_votes = models.PositiveIntegerField(default=0)
     weekly_reactions = models.PositiveIntegerField(default=0)
     weekly_comments = models.PositiveIntegerField(default=0)
+    weekly_poll_votes = models.PositiveIntegerField(default=0)
     monthly_reactions = models.PositiveIntegerField(default=0)
     monthly_comments = models.PositiveIntegerField(default=0)
+    monthly_poll_votes = models.PositiveIntegerField(default=0)
     
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -328,10 +331,11 @@ class UserScore(models.Model):
             self.weekly_points = 0
             self.weekly_reactions = 0
             self.weekly_comments = 0
+            self.weekly_poll_votes = 0
             self.last_weekly_reset = current_week_start
             self.save(update_fields=[
                 'weekly_points', 'weekly_reactions', 'weekly_comments', 
-                'last_weekly_reset'
+                'weekly_poll_votes', 'last_weekly_reset'
             ])
     
     def reset_monthly_if_needed(self):
@@ -341,10 +345,11 @@ class UserScore(models.Model):
             self.monthly_points = 0
             self.monthly_reactions = 0
             self.monthly_comments = 0
+            self.monthly_poll_votes = 0
             self.last_monthly_reset = current_month_start
             self.save(update_fields=[
                 'monthly_points', 'monthly_reactions', 'monthly_comments',
-                'last_monthly_reset'
+                'monthly_poll_votes', 'last_monthly_reset'
             ])
     
     def add_reaction_points(self):
@@ -402,6 +407,35 @@ class UserScore(models.Model):
         self.monthly_comments = max(0, self.monthly_comments - 1)
         
         self.save()
+    
+    # NEW METHODS FOR POLL VOTES
+    def add_poll_vote_points(self):
+        """Add points for a poll vote (25 points)"""
+        self.reset_weekly_if_needed()
+        self.reset_monthly_if_needed()
+        
+        self.total_points += 25
+        self.weekly_points += 25
+        self.monthly_points += 25
+        self.total_poll_votes += 1
+        self.weekly_poll_votes += 1
+        self.monthly_poll_votes += 1
+        
+        self.save()
+    
+    def remove_poll_vote_points(self):
+        """Remove points for a deleted poll vote (25 points)"""
+        self.reset_weekly_if_needed()
+        self.reset_monthly_if_needed()
+        
+        self.total_points = max(0, self.total_points - 25)
+        self.weekly_points = max(0, self.weekly_points - 25)
+        self.monthly_points = max(0, self.monthly_points - 25)
+        self.total_poll_votes = max(0, self.total_poll_votes - 1)
+        self.weekly_poll_votes = max(0, self.weekly_poll_votes - 1)
+        self.monthly_poll_votes = max(0, self.monthly_poll_votes - 1)
+        
+        self.save()
 
 class LeaderboardEntry(models.Model):
     """Model to store historical leaderboard data"""
@@ -420,6 +454,7 @@ class LeaderboardEntry(models.Model):
     rank = models.PositiveIntegerField()
     reactions_count = models.PositiveIntegerField(default=0)
     comments_count = models.PositiveIntegerField(default=0)
+    poll_votes_count = models.PositiveIntegerField(default=0)  # ADD THIS
     
     # Period identification
     year = models.PositiveIntegerField()

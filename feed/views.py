@@ -588,14 +588,76 @@ class UserStatsView(APIView):
             'monthly_rank': monthly_rank,
             'total_reactions': user_score.total_reactions,
             'total_comments': user_score.total_comments,
+            'total_poll_votes': user_score.total_poll_votes,  # ADD THIS
             'weekly_reactions': user_score.weekly_reactions,
             'weekly_comments': user_score.weekly_comments,
+            'weekly_poll_votes': user_score.weekly_poll_votes,  # ADD THIS
             'monthly_reactions': user_score.monthly_reactions,
             'monthly_comments': user_score.monthly_comments,
+            'monthly_poll_votes': user_score.monthly_poll_votes,  # ADD THIS
         }
         
         serializer = UserStatsSerializer(stats_data)
         return Response(serializer.data)
+
+# Update leaderboard_summary function
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def leaderboard_summary(request):
+    """Get leaderboard summary statistics"""
+    total_users = UserScore.objects.count()
+    active_users_week = UserScore.objects.filter(weekly_points__gt=0).count()
+    active_users_month = UserScore.objects.filter(monthly_points__gt=0).count()
+    
+    # Top performers
+    top_total = UserScore.objects.select_related('user').order_by('-total_points').first()
+    top_weekly = UserScore.objects.select_related('user').order_by('-weekly_points').first()
+    top_monthly = UserScore.objects.select_related('user').order_by('-monthly_points').first()
+    
+    # Helper function to serialize user score
+    def serialize_user_score(user_score, period='total'):
+        if not user_score:
+            return None
+        
+        if period == 'weekly':
+            points = user_score.weekly_points
+            reactions = user_score.weekly_reactions
+            comments = user_score.weekly_comments
+            poll_votes = user_score.weekly_poll_votes
+        elif period == 'monthly':
+            points = user_score.monthly_points
+            reactions = user_score.monthly_reactions
+            comments = user_score.monthly_comments
+            poll_votes = user_score.monthly_poll_votes
+        else:
+            points = user_score.total_points
+            reactions = user_score.total_reactions
+            comments = user_score.total_comments
+            poll_votes = user_score.total_poll_votes
+        
+        return {
+            'user': {
+                'id': user_score.user.id,
+                'email': user_score.user.email,
+                'full_name': f"{user_score.user.first_name} {user_score.user.last_name}".strip(),
+                'user_type': user_score.user.user_type
+            },
+            'points': points,
+            'reactions_count': reactions,
+            'comments_count': comments,
+            'poll_votes_count': poll_votes,  # ADD THIS
+        }
+    
+    return Response({
+        'total_users': total_users,
+        'active_users_this_week': active_users_week,
+        'active_users_this_month': active_users_month,
+        'top_performers': {
+            'all_time': serialize_user_score(top_total, 'total'),
+            'this_week': serialize_user_score(top_weekly, 'weekly'),
+            'this_month': serialize_user_score(top_monthly, 'monthly'),
+        }
+    })
 
 
 class HistoricalLeaderboardView(generics.ListAPIView):
@@ -766,30 +828,6 @@ def search_polls(request):
     
     serializer = PollSerializer(polls, many=True, context={'request': request})
     return Response(serializer.data)
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def leaderboard_summary(request):
-    """Get leaderboard summary statistics"""
-    total_users = UserScore.objects.count()
-    active_users_week = UserScore.objects.filter(weekly_points__gt=0).count()
-    active_users_month = UserScore.objects.filter(monthly_points__gt=0).count()
-    
-    # Top performers
-    top_total = UserScore.objects.select_related('user').order_by('-total_points').first()
-    top_weekly = UserScore.objects.select_related('user').order_by('-weekly_points').first()
-    top_monthly = UserScore.objects.select_related('user').order_by('-monthly_points').first()
-    
-    return Response({
-        'total_users': total_users,
-        'active_users_this_week': active_users_week,
-        'active_users_this_month': active_users_month,
-        'top_performers': {
-            'all_time': UserScoreSerializer(top_total).data if top_total else None,
-            'this_week': UserScoreSerializer(top_weekly).data if top_weekly else None,
-            'this_month': UserScoreSerializer(top_monthly).data if top_monthly else None,
-        }
-    })
 
 
 @api_view(['GET'])

@@ -513,45 +513,11 @@ class LeaderboardSerializer(serializers.ModelSerializer):
         model = LeaderboardEntry
         fields = [
             'user', 'rank', 'points', 'reactions_count', 'comments_count',
+            'poll_votes_count',  # ADD THIS
             'period_type', 'year', 'week_number', 'month_number', 'created_at'
         ]
         read_only_fields = ['created_at']
 
-
-class CurrentLeaderboardSerializer(serializers.Serializer):
-    """Serializer for current leaderboard data"""
-    user = AuthorSerializer(read_only=True)
-    rank = serializers.IntegerField()
-    points = serializers.IntegerField()
-    reactions_count = serializers.IntegerField()
-    comments_count = serializers.IntegerField()
-    
-    def to_representation(self, instance):
-        """Custom representation for leaderboard data"""
-        if isinstance(instance, UserScore):
-            period_type = self.context.get('period_type', 'total')
-            
-            if period_type == 'weekly':
-                points = instance.weekly_points
-                reactions = instance.weekly_reactions
-                comments = instance.weekly_comments
-            elif period_type == 'monthly':
-                points = instance.monthly_points
-                reactions = instance.monthly_reactions
-                comments = instance.monthly_comments
-            else:
-                points = instance.total_points
-                reactions = instance.total_reactions
-                comments = instance.total_comments
-            
-            return {
-                'user': AuthorSerializer(instance.user).data,
-                'rank': self.context.get('rank', 1),
-                'points': points,
-                'reactions_count': reactions,
-                'comments_count': comments,
-            }
-        return super().to_representation(instance)
 
 
 class UserStatsSerializer(serializers.Serializer):
@@ -565,7 +531,51 @@ class UserStatsSerializer(serializers.Serializer):
     monthly_rank = serializers.IntegerField()
     total_reactions = serializers.IntegerField()
     total_comments = serializers.IntegerField()
+    total_poll_votes = serializers.IntegerField()  # ADD THIS
     weekly_reactions = serializers.IntegerField()
     weekly_comments = serializers.IntegerField()
+    weekly_poll_votes = serializers.IntegerField()  # ADD THIS
     monthly_reactions = serializers.IntegerField()
     monthly_comments = serializers.IntegerField()
+    monthly_poll_votes = serializers.IntegerField()  # ADD THIS
+
+class CurrentLeaderboardSerializer(serializers.Serializer):
+    """Serializer for current leaderboard data"""
+    user = AuthorSerializer(read_only=True)
+    rank = serializers.IntegerField()
+    points = serializers.IntegerField()
+    reactions_count = serializers.IntegerField()
+    comments_count = serializers.IntegerField()
+    poll_votes_count = serializers.IntegerField()  # ADD THIS
+    
+    def to_representation(self, instance):
+        """Custom representation for leaderboard data"""
+        if isinstance(instance, UserScore):
+            period_type = self.context.get('period_type', 'total')
+            
+            if period_type == 'weekly':
+                points = instance.weekly_points
+                reactions = instance.weekly_reactions
+                comments = instance.weekly_comments
+                poll_votes = instance.weekly_poll_votes  # ADD THIS
+            elif period_type == 'monthly':
+                points = instance.monthly_points
+                reactions = instance.monthly_reactions
+                comments = instance.monthly_comments
+                poll_votes = instance.monthly_poll_votes  # ADD THIS
+            else:
+                points = instance.total_points
+                reactions = instance.total_reactions
+                comments = instance.total_comments
+                poll_votes = instance.total_poll_votes  # ADD THIS
+            
+            return {
+                'user': AuthorSerializer(instance.user).data,
+                'rank': self.context.get('rank', 1),
+                'points': points,
+                'reactions_count': reactions,
+                'comments_count': comments,
+                'poll_votes_count': poll_votes,  # ADD THIS
+            }
+        return super().to_representation(instance)
+
