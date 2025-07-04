@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, F, Count, Case, When, IntegerField
+from django.db.models import Q, F
 from django.db import transaction
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -7,12 +7,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
-from datetime import timedelta, datetime
+from datetime import timedelta
 from django.contrib.auth import get_user_model
 from itertools import chain
-from operator import attrgetter
 
-from .models import Post, Comment, PostReaction, UserScore, LeaderboardEntry, Poll, PollOption, PollVote, get_combined_feed
+from .models import Post, Comment, PostReaction, UserScore, LeaderboardEntry, Poll, PollOption, PollVote
 from .serializers import (
     PostSerializer, PostCreateSerializer, PostUpdateSerializer,
     CommentSerializer, CommentCreateSerializer, PostReactionSerializer,
