@@ -35,13 +35,14 @@ def update_comment_count_on_delete(sender, instance, **kwargs):
         user_score.remove_comment_points()
 
 @receiver(post_save, sender=PostReaction)
-def update_reaction_count_on_create(sender, instance, created, **kwargs):
-    """Update post reaction count when reaction is created"""
+def update_reaction_count_on_save(sender, instance, created, **kwargs):
+    """Update post reaction count when reaction is created or updated"""
+    # Always recalculate the count to be safe
+    instance.post.reactions_count = instance.post.reactions.count()
+    instance.post.save(update_fields=['reactions_count'])
+    
+    # Only add points for newly created reactions
     if created:
-        instance.post.reactions_count = instance.post.reactions.count()
-        instance.post.save(update_fields=['reactions_count'])
-        
-        # Add points for reaction
         with transaction.atomic():
             user_score = UserScore.get_or_create_for_user(instance.user)
             user_score.add_reaction_points()
@@ -56,6 +57,7 @@ def update_reaction_count_on_delete(sender, instance, **kwargs):
     with transaction.atomic():
         user_score = UserScore.get_or_create_for_user(instance.user)
         user_score.remove_reaction_points()
+
 
 # NEW SIGNALS FOR POLL VOTES
 @receiver(post_save, sender=PollVote)
