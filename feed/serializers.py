@@ -168,8 +168,6 @@ class PollUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating polls"""
     options = serializers.ListField(
         child=serializers.CharField(max_length=200),
-        min_length=2,
-        max_length=10,
         required=False,
         allow_empty=True
     )
@@ -196,32 +194,62 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         
         return value
     
+    def to_internal_value(self, data):
+        """Handle different input formats before validation"""
+        # Make a mutable copy of the data
+        if hasattr(data, 'copy'):
+            internal_data = data.copy()
+        else:
+            internal_data = data.copy() if hasattr(data, 'copy') else dict(data)
+        
+        # Handle options field specially
+        options_raw = None
+        
+        # Try different ways to get options data
+        if hasattr(data, 'getlist'):
+            # Multipart form data
+            options_raw = data.getlist('options[]') or data.getlist('options')
+        elif 'options' in data:
+            options_raw = data['options']
+        
+        if options_raw is not None:
+            # Convert to list format
+            if hasattr(options_raw, 'all'):  # RelatedManager
+                options_list = [str(option.text) for option in options_raw.all()]
+            elif isinstance(options_raw, str):
+                # Handle JSON string or single option
+                try:
+                    import json
+                    options_list = json.loads(options_raw)
+                except (json.JSONDecodeError, ValueError):
+                    options_list = [options_raw] if options_raw.strip() else []
+            elif isinstance(options_raw, (list, tuple)):
+                options_list = [str(option) for option in options_raw]
+            else:
+                options_list = [str(options_raw)] if options_raw else []
+            
+            # Clean the options
+            cleaned_options = []
+            for option in options_list:
+                option_str = str(option).strip()
+                if option_str and option_str not in cleaned_options:
+                    cleaned_options.append(option_str)
+            
+            internal_data['options'] = cleaned_options
+        
+        return super().to_internal_value(internal_data)
+    
     def validate_options(self, value):
-        """Validate poll options"""
-        if not value:
+        """Validate poll options - this runs after to_internal_value"""
+        if not value:  # Empty list or None
             return value
         
-        # Handle different input formats
-        if hasattr(value, 'all'):  # RelatedManager
-            options_list = [option.text for option in value.all()]
-        elif isinstance(value, (list, tuple)):
-            options_list = value
-        else:
-            options_list = [str(value)] if value else []
-        
-        # Clean and validate
-        cleaned_options = []
-        for option in options_list:
-            option_str = str(option).strip()
-            if option_str and option_str not in cleaned_options:
-                cleaned_options.append(option_str)
-        
-        if len(cleaned_options) < 2:
-            raise serializers.ValidationError("Poll must have at least 2 unique, non-empty options.")
-        if len(cleaned_options) > 10:
+        if len(value) < 2:
+            raise serializers.ValidationError("Poll must have at least 2 options.")
+        if len(value) > 10:
             raise serializers.ValidationError("Poll cannot have more than 10 options.")
         
-        return cleaned_options
+        return value
     
     def validate(self, data):
         """Ensure user can only update their own polls"""
@@ -230,17 +258,7 @@ class PollUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("You can only edit your own polls.")
         
         return data
-    
-    def to_internal_value(self, data):
-        """Handle multipart form data for options"""
-        # Handle options sent as multiple form fields (options[0], options[1], etc.)
-        if hasattr(data, 'getlist'):
-            options = data.getlist('options[]') or data.getlist('options')
-            if options:
-                data = data.copy()
-                data['options'] = options
-        
-        return super().to_internal_value(data)
+
 
 
 
