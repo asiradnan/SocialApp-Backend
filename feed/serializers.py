@@ -165,11 +165,18 @@ class PollCreateSerializer(serializers.ModelSerializer):
 
 
 class PollUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating polls (only question and media)"""
+    """Serializer for updating polls (question, media, and options)"""
+    options = serializers.ListField(
+        child=serializers.CharField(max_length=200),
+        min_length=2,
+        max_length=10,
+        required=False,
+        write_only=True
+    )
     
     class Meta:
         model = Poll
-        fields = ['question', 'media','options']
+        fields = ['question', 'media', 'options']
     
     def validate_media(self, value):
         """Validate that the uploaded file is either an image or video"""
@@ -189,12 +196,52 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         
         return value
     
+    def validate_options(self, value):
+        """Validate poll options"""
+        if not value:
+            return value
+            
+        if len(value) < 2:
+            raise serializers.ValidationError("Poll must have at least 2 options.")
+        if len(value) > 10:
+            raise serializers.ValidationError("Poll cannot have more than 10 options.")
+        
+        # Remove duplicates and empty options
+        cleaned_options = []
+        for option in value:
+            option = option.strip()
+            if option and option not in cleaned_options:
+                cleaned_options.append(option)
+        
+        if len(cleaned_options) < 2:
+            raise serializers.ValidationError("Poll must have at least 2 unique, non-empty options.")
+        
+        return cleaned_options
+    
     def validate(self, data):
         """Ensure user can only update their own polls"""
         request = self.context.get('request')
         if request and request.user != self.instance.author:
             raise serializers.ValidationError("You can only edit your own polls.")
         return data
+    
+    def update(self, instance, validated_data):
+        """Update poll and handle options if provided"""
+        options_data = validated_data.pop('options', None)
+        
+        # Update basic poll fields
+        instance = super().update(instance, validated_data)
+        
+        # Update options if provided
+        if options_data is not None:
+            # Delete existing options
+            instance.options.all().delete()
+            
+            # Create new options
+            for option_text in options_data:
+                PollOption.objects.create(poll=instance, text=option_text)
+        
+        return instance
 
 
 
