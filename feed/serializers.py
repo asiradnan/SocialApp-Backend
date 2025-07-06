@@ -165,16 +165,11 @@ class PollCreateSerializer(serializers.ModelSerializer):
 
 
 class PollUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating polls"""
-    options = serializers.ListField(
-        child=serializers.CharField(max_length=200),
-        required=False,
-        allow_empty=True
-    )
+    """Serializer for updating polls (only question and media)"""
     
     class Meta:
         model = Poll
-        fields = ['question', 'media', 'options']
+        fields = ['question', 'media','options']
     
     def validate_media(self, value):
         """Validate that the uploaded file is either an image or video"""
@@ -194,87 +189,11 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         
         return value
     
-    def to_internal_value(self, data):
-        """Handle different input formats before validation"""
-        # Make a mutable copy of the data
-        if hasattr(data, 'copy'):
-            internal_data = data.copy()
-        else:
-            internal_data = dict(data)
-        
-        # Handle options field specially
-        options_raw = None
-        
-        # Try different ways to get options data
-        if hasattr(data, 'getlist'):
-            # Multipart form data - try different field names
-            options_raw = (data.getlist('options[]') or 
-                          data.getlist('options') or 
-                          data.get('options'))
-        elif 'options' in data:
-            options_raw = data['options']
-        
-        if options_raw is not None:
-            options_list = []
-            
-            # Handle different formats
-            if hasattr(options_raw, 'all'):  # RelatedManager
-                options_list = [str(option.text) for option in options_raw.all()]
-            elif isinstance(options_raw, dict):
-                # Handle dictionary format like {"0": "option1", "1": "option2"}
-                # Sort by keys to maintain order
-                sorted_keys = sorted(options_raw.keys(), key=lambda x: int(x) if str(x).isdigit() else float('inf'))
-                options_list = [str(options_raw[key]).strip() for key in sorted_keys if str(options_raw[key]).strip()]
-            elif isinstance(options_raw, str):
-                # Handle JSON string or single option
-                try:
-                    import json
-                    parsed = json.loads(options_raw)
-                    if isinstance(parsed, list):
-                        options_list = [str(option).strip() for option in parsed]
-                    elif isinstance(parsed, dict):
-                        # Handle JSON object format
-                        sorted_keys = sorted(parsed.keys(), key=lambda x: int(x) if str(x).isdigit() else float('inf'))
-                        options_list = [str(parsed[key]).strip() for key in sorted_keys if str(parsed[key]).strip()]
-                    else:
-                        options_list = [str(parsed).strip()] if str(parsed).strip() else []
-                except (json.JSONDecodeError, ValueError):
-                    options_list = [options_raw.strip()] if options_raw.strip() else []
-            elif isinstance(options_raw, (list, tuple)):
-                options_list = [str(option).strip() for option in options_raw if str(option).strip()]
-            else:
-                options_list = [str(options_raw).strip()] if str(options_raw).strip() else []
-            
-            # Remove duplicates while preserving order
-            seen = set()
-            cleaned_options = []
-            for option in options_list:
-                if option and option not in seen:
-                    seen.add(option)
-                    cleaned_options.append(option)
-            
-            internal_data['options'] = cleaned_options
-        
-        return super().to_internal_value(internal_data)
-    
-    def validate_options(self, value):
-        """Validate poll options - this runs after to_internal_value"""
-        if not value:  # Empty list or None
-            return value
-        
-        if len(value) < 2:
-            raise serializers.ValidationError("Poll must have at least 2 options.")
-        if len(value) > 10:
-            raise serializers.ValidationError("Poll cannot have more than 10 options.")
-        
-        return value
-    
     def validate(self, data):
         """Ensure user can only update their own polls"""
         request = self.context.get('request')
         if request and request.user != self.instance.author:
             raise serializers.ValidationError("You can only edit your own polls.")
-        
         return data
 
 

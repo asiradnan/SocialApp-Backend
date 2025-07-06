@@ -98,39 +98,14 @@ class PollDetailView(generics.RetrieveUpdateDestroyAPIView):
         poll = self.get_object()
         if poll.author != self.request.user:
             raise permissions.PermissionDenied("You can only edit your own polls.")
-        
-        with transaction.atomic():
-            # Check if options are being updated
-            options_data = serializer.validated_data.get('options')
-            if options_data is not None and len(options_data) > 0:
-                # Store original vote count for logging
-                original_votes = poll.total_votes
-                
-                # Remove all existing poll options and their votes
-                PollVote.objects.filter(poll=poll).delete()
-                poll.options.all().delete()
-                
-                # Reset poll vote count
-                poll.total_votes = 0
-                poll.save()
-                
-                # Create new options
-                for option_text in options_data:
-                    PollOption.objects.create(poll=poll, text=option_text)
-                
-                # Log the change if there were votes
-                if original_votes > 0:
-                    print(f"Poll {poll.id} options updated - {original_votes} votes were reset")
-            
-            # Update other fields
-            for attr, value in serializer.validated_data.items():
-                if attr != 'options':
-                    setattr(poll, attr, value)
-            poll.save()
-
-
-
-
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        if instance.author != self.request.user and self.request.user.user_type != 'admin':
+            raise permissions.PermissionDenied("You can only delete your own polls.")
+        # Soft delete
+        instance.is_active = False
+        instance.save()
     
     def perform_destroy(self, instance):
         if instance.author != self.request.user and self.request.user.user_type != 'admin':
