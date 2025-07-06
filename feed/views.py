@@ -101,22 +101,25 @@ class PollDetailView(generics.RetrieveUpdateDestroyAPIView):
         
         with transaction.atomic():
             # Check if options are being updated
-            if 'options' in serializer.validated_data:
+            options_data = serializer.validated_data.get('options')
+            if options_data is not None:
                 # Remove all existing poll options and their votes
-                existing_options = poll.options.all()
-                
-                # Delete all votes for this poll first
                 PollVote.objects.filter(poll=poll).delete()
-                
-                # Delete all existing options
-                existing_options.delete()
+                poll.options.all().delete()
                 
                 # Reset poll vote count
                 poll.total_votes = 0
                 poll.save()
+                
+                # Create new options
+                for option_text in options_data:
+                    PollOption.objects.create(poll=poll, text=option_text)
             
-            # Save the poll with new options
-            serializer.save()
+            # Update other fields
+            for attr, value in serializer.validated_data.items():
+                if attr != 'options':
+                    setattr(poll, attr, value)
+            poll.save()
 
     
     def perform_destroy(self, instance):

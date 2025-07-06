@@ -165,51 +165,38 @@ class PollCreateSerializer(serializers.ModelSerializer):
 
 
 class PollUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating polls (only question and media)"""
+    """Serializer for updating polls"""
+    options = serializers.ListField(
+        child=serializers.CharField(max_length=200),
+        min_length=2,
+        max_length=10,
+        required=False  # Make it optional
+    )
     
     class Meta:
         model = Poll
-        fields = ['question', 'media']
+        fields = ['question', 'media', 'options']
     
-    def update(self, instance, validated_data):
-        options_data = validated_data.pop('options', None)
-        
-        # Update poll fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        
-        # Create new options if provided
-        if options_data is not None:
-            for option_data in options_data:
-                PollOption.objects.create(poll=instance, **option_data)
-        
-        return instance
-    
-    def validate_media(self, value):
-        """Validate that the uploaded file is either an image or video"""
-        if value:
-            import os
-            file_extension = os.path.splitext(value.name)[1].lower()
-            allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.avi', '.webm']
+    def validate_options(self, value):
+        """Validate poll options if provided"""
+        if value is not None:
+            if len(value) < 2:
+                raise serializers.ValidationError("Poll must have at least 2 options.")
+            if len(value) > 10:
+                raise serializers.ValidationError("Poll cannot have more than 10 options.")
             
-            if file_extension not in allowed_extensions:
-                raise serializers.ValidationError(
-                    "Only image files (jpg, jpeg, png, gif) and video files (mp4, mov, avi, webm) are allowed."
-                )
+            # Remove duplicates and empty options
+            cleaned_options = []
+            for option in value:
+                option = option.strip()
+                if option and option not in cleaned_options:
+                    cleaned_options.append(option)
             
-            max_size = 50 * 1024 * 1024  # 50MB
-            if value.size > max_size:
-                raise serializers.ValidationError("File size cannot exceed 50MB.")
-        
+            if len(cleaned_options) < 2:
+                raise serializers.ValidationError("Poll must have at least 2 unique, non-empty options.")
+            
+            return cleaned_options
         return value
-    
-    def validate(self, data):
-        """Ensure user can only update their own polls"""
-        request = self.context.get('request')
-        if request and request.user != self.instance.author:
-            raise serializers.ValidationError("You can only edit your own polls.")
-        return data
 
 
 class FeedItemSerializer(serializers.Serializer):
