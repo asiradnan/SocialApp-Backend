@@ -103,30 +103,43 @@ class PollDetailView(generics.RetrieveUpdateDestroyAPIView):
             # Check if options are being updated
             options_data = serializer.validated_data.get('options')
             if options_data is not None:
-                # Store original vote count for response
-                original_votes = poll.total_votes
+                # Ensure options_data is a list/iterable, not a RelatedManager
+                if hasattr(options_data, 'all'):  # It's a RelatedManager
+                    options_list = [option.text for option in options_data.all()]
+                elif isinstance(options_data, (list, tuple)):
+                    options_list = options_data
+                else:
+                    # Handle single option or other formats
+                    options_list = [str(options_data)] if options_data else []
                 
-                # Remove all existing poll options and their votes
-                PollVote.objects.filter(poll=poll).delete()
-                poll.options.all().delete()
-                
-                # Reset poll vote count
-                poll.total_votes = 0
-                poll.save()
-                
-                # Create new options
-                for option_text in options_data:
-                    PollOption.objects.create(poll=poll, text=option_text)
-                
-                # Log the change if there were votes
-                if original_votes > 0:
-                    print(f"Poll {poll.id} options updated - {original_votes} votes were reset")
+                # Only proceed if we have valid options
+                if options_list:
+                    # Store original vote count for logging
+                    original_votes = poll.total_votes
+                    
+                    # Remove all existing poll options and their votes
+                    PollVote.objects.filter(poll=poll).delete()
+                    poll.options.all().delete()
+                    
+                    # Reset poll vote count
+                    poll.total_votes = 0
+                    poll.save()
+                    
+                    # Create new options
+                    for option_text in options_list:
+                        if isinstance(option_text, str) and option_text.strip():
+                            PollOption.objects.create(poll=poll, text=option_text.strip())
+                    
+                    # Log the change if there were votes
+                    if original_votes > 0:
+                        print(f"Poll {poll.id} options updated - {original_votes} votes were reset")
             
             # Update other fields
             for attr, value in serializer.validated_data.items():
                 if attr != 'options':
                     setattr(poll, attr, value)
             poll.save()
+
 
 
     

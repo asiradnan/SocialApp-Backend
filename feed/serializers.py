@@ -170,7 +170,8 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         child=serializers.CharField(max_length=200),
         min_length=2,
         max_length=10,
-        required=False  # Make it optional so you can update just question/media
+        required=False,
+        allow_empty=True
     )
     
     class Meta:
@@ -199,21 +200,26 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         """Validate poll options"""
         if not value:
             return value
-            
-        if len(value) < 2:
-            raise serializers.ValidationError("Poll must have at least 2 options.")
-        if len(value) > 10:
-            raise serializers.ValidationError("Poll cannot have more than 10 options.")
         
-        # Remove duplicates and empty options
+        # Handle different input formats
+        if hasattr(value, 'all'):  # RelatedManager
+            options_list = [option.text for option in value.all()]
+        elif isinstance(value, (list, tuple)):
+            options_list = value
+        else:
+            options_list = [str(value)] if value else []
+        
+        # Clean and validate
         cleaned_options = []
-        for option in value:
-            option = option.strip()
-            if option and option not in cleaned_options:
-                cleaned_options.append(option)
+        for option in options_list:
+            option_str = str(option).strip()
+            if option_str and option_str not in cleaned_options:
+                cleaned_options.append(option_str)
         
         if len(cleaned_options) < 2:
             raise serializers.ValidationError("Poll must have at least 2 unique, non-empty options.")
+        if len(cleaned_options) > 10:
+            raise serializers.ValidationError("Poll cannot have more than 10 options.")
         
         return cleaned_options
     
@@ -223,13 +229,19 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         if request and request.user != self.instance.author:
             raise serializers.ValidationError("You can only edit your own polls.")
         
-        # Warning if updating options on a poll with votes
-        options = data.get('options')
-        if options and self.instance.total_votes > 0:
-            # You could add a confirmation field or just warn in the response
-            pass
-            
         return data
+    
+    def to_internal_value(self, data):
+        """Handle multipart form data for options"""
+        # Handle options sent as multiple form fields (options[0], options[1], etc.)
+        if hasattr(data, 'getlist'):
+            options = data.getlist('options[]') or data.getlist('options')
+            if options:
+                data = data.copy()
+                data['options'] = options
+        
+        return super().to_internal_value(data)
+
 
 
 
