@@ -171,6 +171,21 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         model = Poll
         fields = ['question', 'media']
     
+    def update(self, instance, validated_data):
+        options_data = validated_data.pop('options', None)
+        
+        # Update poll fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Create new options if provided
+        if options_data is not None:
+            for option_data in options_data:
+                PollOption.objects.create(poll=instance, **option_data)
+        
+        return instance
+    
     def validate_media(self, value):
         """Validate that the uploaded file is either an image or video"""
         if value:
