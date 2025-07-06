@@ -103,6 +103,9 @@ class PollDetailView(generics.RetrieveUpdateDestroyAPIView):
             # Check if options are being updated
             options_data = serializer.validated_data.get('options')
             if options_data is not None:
+                # Store original vote count for response
+                original_votes = poll.total_votes
+                
                 # Remove all existing poll options and their votes
                 PollVote.objects.filter(poll=poll).delete()
                 poll.options.all().delete()
@@ -114,12 +117,17 @@ class PollDetailView(generics.RetrieveUpdateDestroyAPIView):
                 # Create new options
                 for option_text in options_data:
                     PollOption.objects.create(poll=poll, text=option_text)
+                
+                # Log the change if there were votes
+                if original_votes > 0:
+                    print(f"Poll {poll.id} options updated - {original_votes} votes were reset")
             
             # Update other fields
             for attr, value in serializer.validated_data.items():
                 if attr != 'options':
                     setattr(poll, attr, value)
             poll.save()
+
 
     
     def perform_destroy(self, instance):

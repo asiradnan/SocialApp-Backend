@@ -165,11 +165,17 @@ class PollCreateSerializer(serializers.ModelSerializer):
 
 
 class PollUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating polls (only question and media)"""
+    """Serializer for updating polls"""
+    options = serializers.ListField(
+        child=serializers.CharField(max_length=200),
+        min_length=2,
+        max_length=10,
+        required=False  # Make it optional so you can update just question/media
+    )
     
     class Meta:
         model = Poll
-        fields = ['question', 'media']
+        fields = ['question', 'media', 'options']
     
     def validate_media(self, value):
         """Validate that the uploaded file is either an image or video"""
@@ -189,11 +195,40 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         
         return value
     
+    def validate_options(self, value):
+        """Validate poll options"""
+        if not value:
+            return value
+            
+        if len(value) < 2:
+            raise serializers.ValidationError("Poll must have at least 2 options.")
+        if len(value) > 10:
+            raise serializers.ValidationError("Poll cannot have more than 10 options.")
+        
+        # Remove duplicates and empty options
+        cleaned_options = []
+        for option in value:
+            option = option.strip()
+            if option and option not in cleaned_options:
+                cleaned_options.append(option)
+        
+        if len(cleaned_options) < 2:
+            raise serializers.ValidationError("Poll must have at least 2 unique, non-empty options.")
+        
+        return cleaned_options
+    
     def validate(self, data):
         """Ensure user can only update their own polls"""
         request = self.context.get('request')
         if request and request.user != self.instance.author:
             raise serializers.ValidationError("You can only edit your own polls.")
+        
+        # Warning if updating options on a poll with votes
+        options = data.get('options')
+        if options and self.instance.total_votes > 0:
+            # You could add a confirmation field or just warn in the response
+            pass
+            
         return data
 
 
