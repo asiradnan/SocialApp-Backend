@@ -200,40 +200,58 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         if hasattr(data, 'copy'):
             internal_data = data.copy()
         else:
-            internal_data = data.copy() if hasattr(data, 'copy') else dict(data)
+            internal_data = dict(data)
         
         # Handle options field specially
         options_raw = None
         
         # Try different ways to get options data
         if hasattr(data, 'getlist'):
-            # Multipart form data
-            options_raw = data.getlist('options[]') or data.getlist('options')
+            # Multipart form data - try different field names
+            options_raw = (data.getlist('options[]') or 
+                          data.getlist('options') or 
+                          data.get('options'))
         elif 'options' in data:
             options_raw = data['options']
         
         if options_raw is not None:
-            # Convert to list format
+            options_list = []
+            
+            # Handle different formats
             if hasattr(options_raw, 'all'):  # RelatedManager
                 options_list = [str(option.text) for option in options_raw.all()]
+            elif isinstance(options_raw, dict):
+                # Handle dictionary format like {"0": "option1", "1": "option2"}
+                # Sort by keys to maintain order
+                sorted_keys = sorted(options_raw.keys(), key=lambda x: int(x) if str(x).isdigit() else float('inf'))
+                options_list = [str(options_raw[key]).strip() for key in sorted_keys if str(options_raw[key]).strip()]
             elif isinstance(options_raw, str):
                 # Handle JSON string or single option
                 try:
                     import json
-                    options_list = json.loads(options_raw)
+                    parsed = json.loads(options_raw)
+                    if isinstance(parsed, list):
+                        options_list = [str(option).strip() for option in parsed]
+                    elif isinstance(parsed, dict):
+                        # Handle JSON object format
+                        sorted_keys = sorted(parsed.keys(), key=lambda x: int(x) if str(x).isdigit() else float('inf'))
+                        options_list = [str(parsed[key]).strip() for key in sorted_keys if str(parsed[key]).strip()]
+                    else:
+                        options_list = [str(parsed).strip()] if str(parsed).strip() else []
                 except (json.JSONDecodeError, ValueError):
-                    options_list = [options_raw] if options_raw.strip() else []
+                    options_list = [options_raw.strip()] if options_raw.strip() else []
             elif isinstance(options_raw, (list, tuple)):
-                options_list = [str(option) for option in options_raw]
+                options_list = [str(option).strip() for option in options_raw if str(option).strip()]
             else:
-                options_list = [str(options_raw)] if options_raw else []
+                options_list = [str(options_raw).strip()] if str(options_raw).strip() else []
             
-            # Clean the options
+            # Remove duplicates while preserving order
+            seen = set()
             cleaned_options = []
             for option in options_list:
-                option_str = str(option).strip()
-                if option_str and option_str not in cleaned_options:
-                    cleaned_options.append(option_str)
+                if option and option not in seen:
+                    seen.add(option)
+                    cleaned_options.append(option)
             
             internal_data['options'] = cleaned_options
         
@@ -258,8 +276,6 @@ class PollUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("You can only edit your own polls.")
         
         return data
-
-
 
 
 
