@@ -165,17 +165,27 @@ class PollCreateSerializer(serializers.ModelSerializer):
 
 
 class PollUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating polls"""
-    options = serializers.ListField(
-        child=serializers.CharField(max_length=200),
-        min_length=2,
-        max_length=10,
-        required=False  # Make it optional
-    )
+    """Serializer for updating polls (only question and media)"""
     
     class Meta:
         model = Poll
-        fields = ['question', 'media', 'options']
+        fields = ['question', 'media']
+    
+    def update(self, instance, validated_data):
+        options_data = validated_data.pop('options', None)
+        
+        # Update poll fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Create new options if provided
+        if options_data is not None:
+            for option_data in options_data:
+                PollOption.objects.create(poll=instance, **option_data)
+        
+        return instance
+
     
     def validate_options(self, value):
         """Validate poll options if provided"""
