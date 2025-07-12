@@ -77,16 +77,10 @@ class GoogleSignupSerializer(serializers.Serializer):
         return value.lower()
     
     def validate_gender(self, value):
-        valid_genders = ['male', 'female', 'other', 'prefer not to say']
+        valid_genders = ['male', 'female']
         if value.lower() not in valid_genders:
             # Map common variations
-            gender_mapping = {
-                'male': 'male',
-                'female': 'female',
-                'other': 'other',
-                'prefer not to say': 'other'
-            }
-            return gender_mapping.get(value.lower(), 'other')
+            return None
         return value.lower()
     
     def validate_userType(self, value):
