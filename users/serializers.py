@@ -69,7 +69,7 @@ class GoogleSignupSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     firstName = serializers.CharField(required=True, max_length=150)
     lastName = serializers.CharField(required=True, max_length=150)
-    gender = serializers.CharField(required=False, max_length=10)
+    gender = serializers.CharField(required=False, max_length=10, allow_null=True, allow_blank=True)
     dateOfBirth = serializers.DateField(required=True)
     userType = serializers.CharField(required=False, default='standard')
     
@@ -77,6 +77,10 @@ class GoogleSignupSerializer(serializers.Serializer):
         return value.lower()
     
     def validate_gender(self, value):
+        # Handle cases where gender field is not provided or is empty
+        if not value:
+            return None
+        
         valid_genders = ['male', 'female']
         if value.lower() not in valid_genders:
             return None
@@ -85,7 +89,7 @@ class GoogleSignupSerializer(serializers.Serializer):
     def validate_userType(self, value):
         valid_types = ['instructor', 'standard']
         if value not in valid_types:
-            return 'standard'  # Default to standard if invalid
+            return 'standard'
         return value
     
     def validate(self, data):
@@ -104,7 +108,7 @@ class GoogleSignupSerializer(serializers.Serializer):
             email=validated_data['email'],
             first_name=validated_data['firstName'],
             last_name=validated_data['lastName'],
-            gender=validated_data['gender'],
+            gender=validated_data.get('gender'),  # Will be None if not provided
             date_of_birth=validated_data['dateOfBirth'],
             user_type=validated_data.get('userType', 'standard'),
             is_active=True
@@ -113,4 +117,5 @@ class GoogleSignupSerializer(serializers.Serializer):
         user.set_unusable_password()
         user.save()
         return user
+
     
