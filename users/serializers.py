@@ -114,3 +114,4 @@ class GoogleSignupSerializer(serializers.Serializer):
         user.set_unusable_password()
         user.save()
         return user
+    
