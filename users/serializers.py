@@ -69,7 +69,7 @@ class GoogleSignupSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     firstName = serializers.CharField(required=True, max_length=150)
     lastName = serializers.CharField(required=True, max_length=150)
-    gender = serializers.CharField(required=True, max_length=10)
+    gender = serializers.CharField(required=False, max_length=10)
     dateOfBirth = serializers.DateField(required=True)
     userType = serializers.CharField(required=False, default='standard')
     
@@ -79,12 +79,11 @@ class GoogleSignupSerializer(serializers.Serializer):
     def validate_gender(self, value):
         valid_genders = ['male', 'female']
         if value.lower() not in valid_genders:
-            # Map common variations
             return None
         return value.lower()
     
     def validate_userType(self, value):
-        valid_types = ['instructor', 'standard', 'admin']
+        valid_types = ['instructor', 'standard']
         if value not in valid_types:
             return 'standard'  # Default to standard if invalid
         return value
