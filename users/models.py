@@ -44,6 +44,40 @@ class CustomUser(AbstractUser):
         if self.profile_picture:
             if os.path.isfile(self.profile_picture.path):
                 os.remove(self.profile_picture.path)
+    
+    def delete(self, *args, **kwargs):
+        """Custom delete method to handle all user data properly"""
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Delete profile picture files
+            if self.profile_picture:
+                self.delete_old_profile_picture()
+            
+            # Delete all profile picture files from ProfilePicture model
+            for pic in self.profile_pictures.all():
+                if pic.image and os.path.isfile(pic.image.path):
+                    os.remove(pic.image.path)
+            
+            # Hard delete soft-deleted comments to avoid constraint issues
+            from feed.models import Comment, Post
+            
+            # Get all user's comments (including soft-deleted ones)
+            user_comments = Comment.objects.filter(author=self)
+            user_comments.delete()  # Hard delete
+            
+            # Get all user's posts (including soft-deleted ones)  
+            user_posts = Post.objects.filter(author=self)
+            
+            # Delete media files from posts
+            for post in user_posts:
+                if post.image and os.path.isfile(post.image.path):
+                    os.remove(post.image.path)
+            
+            user_posts.delete()  # Hard delete
+            
+            # Now delete the user (CASCADE will handle the rest)
+            super().delete(*args, **kwargs)
 
 
 class ProfilePicture(models.Model):
