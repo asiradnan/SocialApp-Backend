@@ -1,0 +1,2395 @@
+openapi: 3.0.3
+info:
+  title: SocialApp Backend API
+  version: 1.0.0
+  description: A comprehensive social media backend API with user management, profile
+    pictures, and feed functionality.
+paths:
+  /api/feed/comments/{id}/:
+    get:
+      operationId: feed_comments_retrieve
+      description: |-
+        GET: Retrieve a specific comment
+        PUT/PATCH: Update a comment (only by author)
+        DELETE: Delete a comment (only by author or post author)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+          description: ''
+    put:
+      operationId: feed_comments_update
+      description: |-
+        GET: Retrieve a specific comment
+        PUT/PATCH: Update a comment (only by author)
+        DELETE: Delete a comment (only by author or post author)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+          description: ''
+    patch:
+      operationId: feed_comments_partial_update
+      description: |-
+        GET: Retrieve a specific comment
+        PUT/PATCH: Update a comment (only by author)
+        DELETE: Delete a comment (only by author or post author)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCommentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCommentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCommentRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+          description: ''
+    delete:
+      operationId: feed_comments_destroy
+      description: |-
+        GET: Retrieve a specific comment
+        PUT/PATCH: Update a comment (only by author)
+        DELETE: Delete a comment (only by author or post author)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/feed/feed/:
+    get:
+      operationId: feed_feed_list
+      description: Get combined feed of posts and polls ordered by creation time
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFeedItemList'
+          description: ''
+  /api/feed/feed/stats/:
+    get:
+      operationId: feed_feed_stats_retrieve
+      description: Get feed statistics
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/feed/leaderboard/:
+    get:
+      operationId: feed_leaderboard_list
+      description: |-
+        Get current leaderboard
+        Query params:
+        - period: 'weekly', 'monthly', or 'total' (default)
+        - limit: number of results (default 50)
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCurrentLeaderboardList'
+          description: ''
+  /api/feed/leaderboard/historical/:
+    get:
+      operationId: feed_leaderboard_historical_list
+      description: Get historical leaderboard data
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLeaderboardList'
+          description: ''
+  /api/feed/leaderboard/summary/:
+    get:
+      operationId: feed_leaderboard_summary_retrieve
+      description: Get leaderboard summary statistics
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/feed/polls/:
+    get:
+      operationId: feed_polls_list
+      description: |-
+        GET: List all polls with pagination
+        POST: Create a new poll
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPollList'
+          description: ''
+    post:
+      operationId: feed_polls_create
+      description: |-
+        GET: List all polls with pagination
+        POST: Create a new poll
+      tags:
+      - feed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PollCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PollCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PollCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PollCreate'
+          description: ''
+  /api/feed/polls/{id}/:
+    get:
+      operationId: feed_polls_retrieve
+      description: |-
+        GET: Retrieve a specific poll
+        PUT/PATCH: Update a poll (only by author)
+        DELETE: Delete a poll (only by author or admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poll'
+          description: ''
+    put:
+      operationId: feed_polls_update
+      description: |-
+        GET: Retrieve a specific poll
+        PUT/PATCH: Update a poll (only by author)
+        DELETE: Delete a poll (only by author or admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PollUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PollUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PollUpdateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PollUpdate'
+          description: ''
+    patch:
+      operationId: feed_polls_partial_update
+      description: |-
+        GET: Retrieve a specific poll
+        PUT/PATCH: Update a poll (only by author)
+        DELETE: Delete a poll (only by author or admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPollUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPollUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPollUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PollUpdate'
+          description: ''
+    delete:
+      operationId: feed_polls_destroy
+      description: |-
+        GET: Retrieve a specific poll
+        PUT/PATCH: Update a poll (only by author)
+        DELETE: Delete a poll (only by author or admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/feed/polls/{poll_id}/vote/:
+    post:
+      operationId: feed_polls_vote_create
+      description: |-
+        POST: Vote on a poll
+        DELETE: Remove vote from a poll
+      parameters:
+      - in: path
+        name: poll_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: feed_polls_vote_destroy
+      description: |-
+        POST: Vote on a poll
+        DELETE: Remove vote from a poll
+      parameters:
+      - in: path
+        name: poll_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/feed/polls/{poll_id}/votes/detail/:
+    get:
+      operationId: feed_polls_votes_detail_retrieve
+      description: Get detailed vote information for a poll
+      parameters:
+      - in: path
+        name: poll_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/feed/posts/:
+    get:
+      operationId: feed_posts_list
+      description: |-
+        GET: List all posts with pagination
+        POST: Create a new post
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPostList'
+          description: ''
+    post:
+      operationId: feed_posts_create
+      description: |-
+        GET: List all posts with pagination
+        POST: Create a new post
+      tags:
+      - feed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PostCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PostCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostCreate'
+          description: ''
+  /api/feed/posts/{id}/:
+    get:
+      operationId: feed_posts_retrieve
+      description: |-
+        GET: Retrieve a specific post
+        PUT/PATCH: Update a post (only by author)
+        DELETE: Delete a post (only by author or admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+          description: ''
+    put:
+      operationId: feed_posts_update
+      description: |-
+        GET: Retrieve a specific post
+        PUT/PATCH: Update a post (only by author)
+        DELETE: Delete a post (only by author or admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PostUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PostUpdateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostUpdate'
+          description: ''
+    patch:
+      operationId: feed_posts_partial_update
+      description: |-
+        GET: Retrieve a specific post
+        PUT/PATCH: Update a post (only by author)
+        DELETE: Delete a post (only by author or admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPostUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPostUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPostUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostUpdate'
+          description: ''
+    delete:
+      operationId: feed_posts_destroy
+      description: |-
+        GET: Retrieve a specific post
+        PUT/PATCH: Update a post (only by author)
+        DELETE: Delete a post (only by author or admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/feed/posts/{post_id}/comments/:
+    get:
+      operationId: feed_posts_comments_list
+      description: |-
+        GET: List comments for a specific post
+        POST: Create a new comment on a post
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Comment'
+          description: ''
+    post:
+      operationId: feed_posts_comments_create
+      description: |-
+        GET: List comments for a specific post
+        POST: Create a new comment on a post
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentCreate'
+          description: ''
+  /api/feed/posts/{post_id}/reactions/:
+    post:
+      operationId: feed_posts_reactions_create
+      description: |-
+        POST: Add or update reaction to a post
+        DELETE: Remove reaction from a post
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: feed_posts_reactions_destroy
+      description: |-
+        POST: Add or update reaction to a post
+        DELETE: Remove reaction from a post
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/feed/posts/{post_id}/reactions/detail/:
+    get:
+      operationId: feed_posts_reactions_detail_retrieve
+      description: Get detailed reaction information for a post
+      parameters:
+      - in: path
+        name: post_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/feed/search/polls/:
+    get:
+      operationId: feed_search_polls_retrieve
+      description: Advanced search for polls
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/feed/search/posts/:
+    get:
+      operationId: feed_search_posts_retrieve
+      description: Advanced search for posts
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/feed/users/{user_id}/polls/:
+    get:
+      operationId: feed_users_polls_list
+      description: Get all polls by a specific user
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPollList'
+          description: ''
+  /api/feed/users/{user_id}/posts/:
+    get:
+      operationId: feed_users_posts_list
+      description: Get all posts by a specific user
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPostList'
+          description: ''
+  /api/feed/users/{user_id}/stats/:
+    get:
+      operationId: feed_users_stats_retrieve
+      description: Get detailed stats for a specific user
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/feed/users/my-stats/:
+    get:
+      operationId: feed_users_my_stats_retrieve
+      description: Get detailed stats for a specific user
+      tags:
+      - feed
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/token/refresh/:
+    post:
+      operationId: token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/users/google-auth/:
+    post:
+      operationId: users_google_auth_create
+      description: Authenticate existing user with Google ID token
+      summary: Google authentication
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/users/google-signup/:
+    post:
+      operationId: users_google_signup_create
+      description: Register new user with Google ID token
+      summary: Google signup
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleSignupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoogleSignupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoogleSignupRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/users/login/:
+    post:
+      operationId: users_login_create
+      description: Authenticate user with email and password to get JWT tokens
+      summary: User login
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/users/logout/:
+    post:
+      operationId: users_logout_create
+      description: Logout user by blacklisting the refresh token
+      summary: User logout
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          type:
+            schema:
+              type: object
+              additionalProperties: {}
+              description: Unspecified request body
+          properties:
+            schema:
+              refresh:
+                type: string
+                description: Refresh token to blacklist
+          required:
+            schema:
+              type: object
+              additionalProperties: {}
+              description: Unspecified request body
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/users/me/:
+    get:
+      operationId: users_me_retrieve
+      description: Get the current authenticated user profile information
+      summary: Get user profile
+      tags:
+      - Profile
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+          description: ''
+    put:
+      operationId: users_me_update
+      description: Update the current authenticated user profile information
+      summary: Update user profile
+      tags:
+      - Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/users/password/:
+    put:
+      operationId: users_password_update
+      description: Change the current authenticated user password
+      summary: Change password
+      tags:
+      - Profile
+      requestBody:
+        content:
+          type:
+            schema:
+              type: object
+              additionalProperties: {}
+              description: Unspecified request body
+          properties:
+            schema:
+              old_password:
+                type: string
+                description: Current password
+              new_password:
+                type: string
+                description: New password
+              confirm_password:
+                type: string
+                description: Confirm new password
+          required:
+            schema:
+              type: object
+              additionalProperties: {}
+              description: Unspecified request body
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/users/profile-picture/:
+    get:
+      operationId: users_profile_picture_list
+      description: Get all profile pictures for the authenticated user
+      summary: Get profile pictures
+      tags:
+      - Profile Pictures
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProfilePicture'
+          description: ''
+    post:
+      operationId: users_profile_picture_create
+      description: Upload a new profile picture. Previous profile picture will be
+        replaced.
+      summary: Upload profile picture
+      tags:
+      - Profile Pictures
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProfilePictureUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProfilePictureUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+    delete:
+      operationId: users_profile_picture_destroy
+      description: Delete the current profile picture of the authenticated user
+      summary: Delete current profile picture
+      tags:
+      - Profile Pictures
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/users/profile-picture/{id}/:
+    get:
+      operationId: users_profile_picture_retrieve
+      description: Get details of a specific profile picture by ID
+      summary: Get specific profile picture
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        description: Profile picture ID
+        required: true
+      tags:
+      - Profile Pictures
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilePicture'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+    put:
+      operationId: users_profile_picture_update
+      description: Set a specific profile picture as the current one
+      summary: Set profile picture as current
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        description: Profile picture ID
+        required: true
+      tags:
+      - Profile Pictures
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+    delete:
+      operationId: users_profile_picture_destroy_2
+      description: Delete a specific profile picture by ID
+      summary: Delete specific profile picture
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        description: Profile picture ID
+        required: true
+      tags:
+      - Profile Pictures
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+  /api/users/register/:
+    get:
+      operationId: users_register_list
+      description: Get a list of all registered users (for development purposes)
+      summary: List all users
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Register'
+          description: ''
+    post:
+      operationId: users_register_create
+      description: Create a new user account with email and password
+      summary: Register new user
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+                description: Unspecified response body
+          description: ''
+components:
+  schemas:
+    Author:
+      type: object
+      description: Serializer for displaying author information in posts and comments
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        user_type:
+          enum:
+          - instructor
+          - standard
+          - admin
+          type: string
+          description: |-
+            * `instructor` - Instructor
+            * `standard` - Standard
+            * `admin` - Admin
+          x-spec-enum-id: e60a3b67be8ce5d4
+          readOnly: true
+    Comment:
+      type: object
+      description: Serializer for comments with nested replies
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        author:
+          allOf:
+          - $ref: '#/components/schemas/Author'
+          readOnly: true
+        content:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        replies_count:
+          type: integer
+          readOnly: true
+        replies:
+          type: string
+          readOnly: true
+        is_reply:
+          type: string
+          readOnly: true
+        parent:
+          type: integer
+          nullable: true
+        can_edit:
+          type: string
+          readOnly: true
+        can_delete:
+          type: string
+          readOnly: true
+      required:
+      - content
+    CommentCreate:
+      type: object
+      description: Simplified serializer for creating comments
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        parent:
+          type: integer
+          nullable: true
+      required:
+      - content
+    CommentCreateRequest:
+      type: object
+      description: Simplified serializer for creating comments
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        parent:
+          type: integer
+          nullable: true
+      required:
+      - content
+    CommentRequest:
+      type: object
+      description: Serializer for comments with nested replies
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        parent:
+          type: integer
+          nullable: true
+      required:
+      - content
+    CurrentLeaderboard:
+      type: object
+      description: Serializer for current leaderboard data
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/Author'
+          readOnly: true
+        rank:
+          type: integer
+        points:
+          type: integer
+        reactions_count:
+          type: integer
+        comments_count:
+          type: integer
+        poll_votes_count:
+          type: integer
+      required:
+      - comments_count
+      - points
+      - poll_votes_count
+      - rank
+      - reactions_count
+    FeedItem:
+      type: object
+      description: Serializer for combined feed items (posts and polls)
+      properties:
+        type:
+          type: string
+        data:
+          type: string
+          readOnly: true
+      required:
+      - type
+    GoogleAuthRequest:
+      type: object
+      properties:
+        idToken:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+      required:
+      - email
+      - idToken
+      - name
+    GoogleSignupRequest:
+      type: object
+      properties:
+        idToken:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+          minLength: 1
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 150
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 150
+        gender:
+          type: string
+          nullable: true
+          maxLength: 10
+        dateOfBirth:
+          type: string
+          format: date
+        userType:
+          type: string
+          minLength: 1
+          default: standard
+      required:
+      - dateOfBirth
+      - email
+      - firstName
+      - idToken
+      - lastName
+    Leaderboard:
+      type: object
+      description: Serializer for leaderboard entries
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/Author'
+          readOnly: true
+        rank:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        points:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        reactions_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        comments_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        poll_votes_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        period_type:
+          enum:
+          - weekly
+          - monthly
+          type: string
+          description: |-
+            * `weekly` - Weekly
+            * `monthly` - Monthly
+          x-spec-enum-id: aa8bc91a8e2e0653
+        year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        week_number:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        month_number:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - period_type
+      - points
+      - rank
+      - year
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+    PaginatedCurrentLeaderboardList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurrentLeaderboard'
+    PaginatedFeedItemList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeedItem'
+    PaginatedLeaderboardList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Leaderboard'
+    PaginatedPollList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Poll'
+    PaginatedPostList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Post'
+    PatchedCommentRequest:
+      type: object
+      description: Serializer for comments with nested replies
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        parent:
+          type: integer
+          nullable: true
+    PatchedPollUpdateRequest:
+      type: object
+      description: Serializer for updating polls (question, media, and options)
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 500
+        media:
+          type: string
+          format: binary
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+        options:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+          writeOnly: true
+          maxItems: 10
+          minItems: 2
+    PatchedPostUpdateRequest:
+      type: object
+      description: Serializer for updating posts
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        image:
+          type: string
+          format: binary
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+    Poll:
+      type: object
+      description: Serializer for polls
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        author:
+          allOf:
+          - $ref: '#/components/schemas/Author'
+          readOnly: true
+        question:
+          type: string
+          minLength: 1
+          maxLength: 500
+        media:
+          type: string
+          format: uri
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        total_votes:
+          type: integer
+          readOnly: true
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/PollOption'
+          readOnly: true
+        user_vote:
+          type: string
+          readOnly: true
+        can_edit:
+          type: string
+          readOnly: true
+        can_delete:
+          type: string
+          readOnly: true
+        time_since_created:
+          type: string
+          readOnly: true
+        media_type:
+          type: string
+          readOnly: true
+        is_image:
+          type: string
+          readOnly: true
+        is_video:
+          type: string
+          readOnly: true
+        media_url:
+          type: string
+          readOnly: true
+      required:
+      - question
+    PollCreate:
+      type: object
+      description: Serializer for creating polls
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 500
+        media:
+          type: string
+          format: uri
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+      required:
+      - question
+    PollCreateRequest:
+      type: object
+      description: Serializer for creating polls
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 500
+        media:
+          type: string
+          format: binary
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+        options:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+          writeOnly: true
+          maxItems: 10
+          minItems: 2
+      required:
+      - options
+      - question
+    PollOption:
+      type: object
+      description: Serializer for poll options
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        text:
+          type: string
+          maxLength: 200
+          minLength: 1
+        votes_count:
+          type: integer
+          readOnly: true
+        vote_percentage:
+          type: string
+          readOnly: true
+      required:
+      - text
+    PollUpdate:
+      type: object
+      description: Serializer for updating polls (question, media, and options)
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 500
+        media:
+          type: string
+          format: uri
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+      required:
+      - question
+    PollUpdateRequest:
+      type: object
+      description: Serializer for updating polls (question, media, and options)
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 500
+        media:
+          type: string
+          format: binary
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+        options:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+          writeOnly: true
+          maxItems: 10
+          minItems: 2
+      required:
+      - question
+    Post:
+      type: object
+      description: Main serializer for posts
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        author:
+          allOf:
+          - $ref: '#/components/schemas/Author'
+          readOnly: true
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        image:
+          type: string
+          format: uri
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reactions_count:
+          type: integer
+          readOnly: true
+        comments_count:
+          type: integer
+          readOnly: true
+        comments:
+          type: string
+          readOnly: true
+        reactions:
+          type: string
+          readOnly: true
+        user_reaction:
+          type: string
+          readOnly: true
+        can_edit:
+          type: string
+          readOnly: true
+        can_delete:
+          type: string
+          readOnly: true
+        time_since_created:
+          type: string
+          readOnly: true
+        media_type:
+          type: string
+          readOnly: true
+        is_image:
+          type: string
+          readOnly: true
+        is_video:
+          type: string
+          readOnly: true
+        media_url:
+          type: string
+          readOnly: true
+      required:
+      - content
+    PostCreate:
+      type: object
+      description: Simplified serializer for creating posts
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        image:
+          type: string
+          format: uri
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+      required:
+      - content
+    PostCreateRequest:
+      type: object
+      description: Simplified serializer for creating posts
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        image:
+          type: string
+          format: binary
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+      required:
+      - content
+    PostUpdate:
+      type: object
+      description: Serializer for updating posts
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        image:
+          type: string
+          format: uri
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+      required:
+      - content
+    PostUpdateRequest:
+      type: object
+      description: Serializer for updating posts
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        image:
+          type: string
+          format: binary
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|mp4|mov|avi|webm)$
+      required:
+      - content
+    ProfilePicture:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        image:
+          type: string
+          format: uri
+        image_url:
+          type: string
+          readOnly: true
+        uploaded_at:
+          type: string
+          format: date-time
+          readOnly: true
+        is_current:
+          type: boolean
+        file_size:
+          type: integer
+          readOnly: true
+      required:
+      - image
+    ProfilePictureUploadRequest:
+      type: object
+      description: Simplified serializer for profile picture upload
+      properties:
+        image:
+          type: string
+          format: binary
+      required:
+      - image
+    Register:
+      type: object
+      properties:
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        gender:
+          enum:
+          - male
+          - female
+          - ''
+          - null
+          type: string
+          description: |-
+            * `male` - Male
+            * `female` - Female
+          x-spec-enum-id: dc160bf28bee6de5
+          nullable: true
+        user_type:
+          enum:
+          - instructor
+          - standard
+          - admin
+          type: string
+          description: |-
+            * `instructor` - Instructor
+            * `standard` - Standard
+            * `admin` - Admin
+          x-spec-enum-id: e60a3b67be8ce5d4
+      required:
+      - email
+      - first_name
+      - last_name
+      - user_type
+    RegisterRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password2:
+          type: string
+          writeOnly: true
+          minLength: 1
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        gender:
+          enum:
+          - male
+          - female
+          - ''
+          - null
+          type: string
+          description: |-
+            * `male` - Male
+            * `female` - Female
+          x-spec-enum-id: dc160bf28bee6de5
+          nullable: true
+        user_type:
+          enum:
+          - instructor
+          - standard
+          - admin
+          type: string
+          description: |-
+            * `instructor` - Instructor
+            * `standard` - Standard
+            * `admin` - Admin
+          x-spec-enum-id: e60a3b67be8ce5d4
+      required:
+      - email
+      - first_name
+      - last_name
+      - password
+      - password2
+      - user_type
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    UserProfile:
+      type: object
+      properties:
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        gender:
+          enum:
+          - male
+          - female
+          - ''
+          - null
+          type: string
+          description: |-
+            * `male` - Male
+            * `female` - Female
+          x-spec-enum-id: dc160bf28bee6de5
+          nullable: true
+        user_type:
+          enum:
+          - instructor
+          - standard
+          - admin
+          type: string
+          description: |-
+            * `instructor` - Instructor
+            * `standard` - Standard
+            * `admin` - Admin
+          x-spec-enum-id: e60a3b67be8ce5d4
+        profile_picture:
+          type: string
+          format: uri
+          nullable: true
+        profile_picture_url:
+          type: string
+          readOnly: true
+      required:
+      - user_type
+    UserProfileRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        gender:
+          enum:
+          - male
+          - female
+          - ''
+          - null
+          type: string
+          description: |-
+            * `male` - Male
+            * `female` - Female
+          x-spec-enum-id: dc160bf28bee6de5
+          nullable: true
+        user_type:
+          enum:
+          - instructor
+          - standard
+          - admin
+          type: string
+          description: |-
+            * `instructor` - Instructor
+            * `standard` - Standard
+            * `admin` - Admin
+          x-spec-enum-id: e60a3b67be8ce5d4
+        profile_picture:
+          type: string
+          format: binary
+          nullable: true
+      required:
+      - user_type
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+tags:
+- name: Authentication
+  description: User authentication and account management
+- name: Profile
+  description: User profile management
+- name: Profile Pictures
+  description: Profile picture upload and management
+- name: Feed
+  description: Social media feed functionality

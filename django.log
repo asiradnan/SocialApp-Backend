@@ -5,3 +5,14 @@ Not Found: /
 "GET / HTTP/1.1" 404 2652
 Not Found: /favicon.ico
 "GET /favicon.ico HTTP/1.1" 404 2703
+Watching for file changes with StatReloader
+/home/asiradnan/A Laptop/Kaj Kormo/Code/Projects/SocialBackend/SocialBackend/settings.py changed, reloading.
+Watching for file changes with StatReloader
+/home/asiradnan/A Laptop/Kaj Kormo/Code/Projects/SocialBackend/SocialBackend/settings.py changed, reloading.
+Watching for file changes with StatReloader
+/home/asiradnan/A Laptop/Kaj Kormo/Code/Projects/SocialBackend/SocialBackend/settings.py changed, reloading.
+Watching for file changes with StatReloader
+/home/asiradnan/A Laptop/Kaj Kormo/Code/Projects/SocialBackend/SocialBackend/settings.py changed, reloading.
+Watching for file changes with StatReloader
+/home/asiradnan/A Laptop/Kaj Kormo/Code/Projects/SocialBackend/users/serializers.py changed, reloading.
+Watching for file changes with StatReloader

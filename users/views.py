@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -10,8 +11,12 @@ from django.conf import settings
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
-from .serializers import RegisterSerializer, LoginSerializer, UserProfileSerializer, GoogleAuthSerializer, GoogleSignupSerializer
-from .models import CustomUser
+from .serializers import (
+    RegisterSerializer, LoginSerializer, UserProfileSerializer, 
+    GoogleAuthSerializer, GoogleSignupSerializer, ProfilePictureSerializer,
+    ProfilePictureUploadSerializer
+)
+from .models import CustomUser, ProfilePicture
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +82,12 @@ class UserView(APIView):
     
     def get(self, request):
         user = request.user
-        serializer = UserProfileSerializer(user)
+        serializer = UserProfileSerializer(user, context={'request': request})
         return Response(serializer.data)
     
     def put(self, request):
         user = request.user
-        serializer = UserProfileSerializer(user, data=request.data, partial=True)
+        serializer = UserProfileSerializer(user, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -256,3 +261,141 @@ class GoogleSignupView(APIView):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProfilePictureView(APIView):
+    """
+    Handle profile picture operations
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request):
+        """Get user's profile pictures"""
+        profile_pictures = ProfilePicture.objects.filter(user=request.user)
+        serializer = ProfilePictureSerializer(profile_pictures, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """Upload a new profile picture"""
+        serializer = ProfilePictureUploadSerializer(data=request.data)
+        if serializer.is_valid():
+            image = serializer.validated_data['image']
+            
+            # Delete old profile picture if exists
+            if request.user.profile_picture:
+                request.user.delete_old_profile_picture()
+            
+            # Create new profile picture
+            profile_picture = ProfilePicture.objects.create(
+                user=request.user,
+                image=image,
+                is_current=True
+            )
+            
+            # Update user's profile picture field
+            request.user.profile_picture = image
+            request.user.save(update_fields=['profile_picture'])
+            
+            serializer = ProfilePictureSerializer(profile_picture, context={'request': request})
+            return Response({
+                'message': 'Profile picture uploaded successfully',
+                'profile_picture': serializer.data
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        """Delete current profile picture"""
+        try:
+            if request.user.profile_picture:
+                # Delete the file
+                request.user.delete_old_profile_picture()
+                
+                # Update user model
+                request.user.profile_picture = None
+                request.user.save(update_fields=['profile_picture'])
+                
+                # Mark all profile pictures as not current
+                ProfilePicture.objects.filter(user=request.user, is_current=True).update(is_current=False)
+                
+                return Response({
+                    'message': 'Profile picture deleted successfully'
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error': 'No profile picture to delete'
+                }, status=status.HTTP_404_NOT_FOUND)
+                
+        except Exception as e:
+            logger.error(f"Profile picture deletion error: {str(e)}")
+            return Response({
+                'error': 'Failed to delete profile picture'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProfilePictureDetailView(APIView):
+    """
+    Handle specific profile picture operations
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        """Get specific profile picture"""
+        try:
+            profile_picture = ProfilePicture.objects.get(pk=pk, user=request.user)
+            serializer = ProfilePictureSerializer(profile_picture, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ProfilePicture.DoesNotExist:
+            return Response({
+                'error': 'Profile picture not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def put(self, request, pk):
+        """Set specific profile picture as current"""
+        try:
+            profile_picture = ProfilePicture.objects.get(pk=pk, user=request.user)
+            
+            # Set all other profile pictures as not current
+            ProfilePicture.objects.filter(user=request.user, is_current=True).update(is_current=False)
+            
+            # Set this one as current
+            profile_picture.is_current = True
+            profile_picture.save()
+            
+            # Update user's profile picture field
+            request.user.profile_picture = profile_picture.image
+            request.user.save(update_fields=['profile_picture'])
+            
+            serializer = ProfilePictureSerializer(profile_picture, context={'request': request})
+            return Response({
+                'message': 'Profile picture set as current',
+                'profile_picture': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except ProfilePicture.DoesNotExist:
+            return Response({
+                'error': 'Profile picture not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pk):
+        """Delete specific profile picture"""
+        try:
+            profile_picture = ProfilePicture.objects.get(pk=pk, user=request.user)
+            
+            # If this is the current profile picture, update user model
+            if profile_picture.is_current:
+                request.user.profile_picture = None
+                request.user.save(update_fields=['profile_picture'])
+            
+            # Delete the profile picture (this will also delete the file)
+            profile_picture.delete()
+            
+            return Response({
+                'message': 'Profile picture deleted successfully'
+            }, status=status.HTTP_200_OK)
+            
+        except ProfilePicture.DoesNotExist:
+            return Response({
+                'error': 'Profile picture not found'
+            }, status=status.HTTP_404_NOT_FOUND)
