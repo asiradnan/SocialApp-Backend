@@ -9,14 +9,24 @@ User = get_user_model()
 class AuthorSerializer(serializers.ModelSerializer):
     """Serializer for displaying author information in posts and comments"""
     full_name = serializers.SerializerMethodField()
+    profile_picture_url = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'full_name', 'user_type']
+        fields = ['id', 'email', 'first_name', 'last_name', 'full_name', 'user_type', 'profile_picture_url']
         read_only_fields = ['id', 'email', 'first_name', 'last_name', 'user_type']
     
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip()
+    
+    def get_profile_picture_url(self, obj):
+        """Get the full URL for the user's profile picture"""
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
 
 
 class PollOptionSerializer(serializers.ModelSerializer):
