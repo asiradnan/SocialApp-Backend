@@ -21,18 +21,32 @@ def update_comment_count_on_create(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=Comment)
 def update_comment_count_on_delete(sender, instance, **kwargs):
     """Update post comment count when comment is deleted"""
-    instance.post.comments_count = instance.post.comments.filter(is_active=True).count()
-    instance.post.save(update_fields=['comments_count'])
-    
-    # Update parent comment reply count
-    if instance.parent:
-        instance.parent.replies_count = instance.parent.replies.filter(is_active=True).count()
-        instance.parent.save(update_fields=['replies_count'])
-    
-    # Remove points for comment
-    with transaction.atomic():
-        user_score = UserScore.get_or_create_for_user(instance.author)
-        user_score.remove_comment_points()
+    try:
+        # Update post comment count (only if post still exists)
+        if hasattr(instance, 'post') and instance.post:
+            instance.post.comments_count = instance.post.comments.filter(is_active=True).count()
+            instance.post.save(update_fields=['comments_count'])
+        
+        # Update parent comment reply count (only if parent still exists)
+        if hasattr(instance, 'parent') and instance.parent:
+            # Check if parent still exists in database (might be deleted in cascade)
+            try:
+                parent_comment = Comment.objects.get(id=instance.parent.id)
+                parent_comment.replies_count = parent_comment.replies.filter(is_active=True).count()
+                parent_comment.save(update_fields=['replies_count'])
+            except Comment.DoesNotExist:
+                # Parent was deleted in cascade, no need to update count
+                pass
+        
+        # Remove points for comment
+        with transaction.atomic():
+            user_score = UserScore.get_or_create_for_user(instance.author)
+            user_score.remove_comment_points()
+    except Exception as e:
+        # Log the error but don't raise it to avoid breaking the deletion
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error updating comment counts on delete: {str(e)}")
 
 @receiver(post_save, sender=PostReaction)
 def update_reaction_count_on_save(sender, instance, created, **kwargs):

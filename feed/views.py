@@ -365,19 +365,33 @@ class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
             self.request.user.user_type != 'admin'):
             raise permissions.PermissionDenied("You can only delete your own comments or comments on your posts.")
         
-        # Update counts and soft delete
+        # Update counts and soft delete with cascading
         with transaction.atomic():
+            # Count how many comments will be deleted (comment + all its active replies)
+            replies_to_delete = instance.replies.filter(is_active=True)
+            total_comments_to_delete = 1 + replies_to_delete.count()
+            
+            # Soft delete the comment and all its replies
+            instance.is_active = False
+            instance.save()
+            
+            # Soft delete all replies
+            replies_to_delete.update(is_active=False)
+            
+            # Update post comment count
             Post.objects.filter(pk=instance.post.pk).update(
-                comments_count=F('comments_count') - 1
+                comments_count=F('comments_count') - total_comments_to_delete
             )
             
+            # Update parent comment reply count (if this comment is a reply)
             if instance.parent:
                 Comment.objects.filter(pk=instance.parent.pk).update(
                     replies_count=F('replies_count') - 1
                 )
             
-            instance.is_active = False
-            instance.save()
+            # If this comment has replies, reset its replies_count to 0
+            if replies_to_delete.exists():
+                Comment.objects.filter(pk=instance.pk).update(replies_count=0)
 
 
 class PostReactionView(APIView):
