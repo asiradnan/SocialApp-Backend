@@ -21,6 +21,7 @@ class CustomUser(AbstractUser):
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=10, choices=[('male', 'Male'), ('female', 'Female')], null=True, blank=True)
     profile_picture = models.ImageField(upload_to=user_profile_picture_path, null=True, blank=True)
+    fcm_token = models.CharField(max_length=255, null=True, blank=True, db_index=True, help_text="Firebase Cloud Messaging token for push notifications")
 
     username = None  # remove the default username field
     email = models.EmailField(unique=True)  
@@ -81,3 +82,21 @@ class ProfilePicture(models.Model):
             if os.path.isfile(self.image.path):
                 os.remove(self.image.path)
         super().delete(*args, **kwargs)
+
+
+class MutedInstructor(models.Model):
+    """Model to track users who have muted notifications from specific instructors"""
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='muted_instructors')
+    instructor = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='muted_by_users')
+    muted_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('user', 'instructor')
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['instructor']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} muted {self.instructor.email}"
+

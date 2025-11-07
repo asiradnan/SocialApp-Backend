@@ -14,9 +14,10 @@ from google.auth.transport import requests
 from .serializers import (
     RegisterSerializer, LoginSerializer, UserProfileSerializer, 
     GoogleAuthSerializer, GoogleSignupSerializer, ProfilePictureSerializer,
-    ProfilePictureUploadSerializer
+    ProfilePictureUploadSerializer, FCMTokenSerializer, MutedInstructorSerializer,
+    MuteInstructorSerializer
 )
-from .models import CustomUser, ProfilePicture
+from .models import CustomUser, ProfilePicture, MutedInstructor
 
 logger = logging.getLogger(__name__)
 
@@ -399,3 +400,133 @@ class ProfilePictureDetailView(APIView):
             return Response({
                 'error': 'Profile picture not found'
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+class FCMTokenView(APIView):
+    """
+    Handle FCM token updates
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Update user's FCM token"""
+        serializer = FCMTokenSerializer(data=request.data)
+        if serializer.is_valid():
+            fcm_token = serializer.validated_data['fcm_token']
+            
+            # Update user's FCM token
+            request.user.fcm_token = fcm_token
+            request.user.save(update_fields=['fcm_token'])
+            
+            logger.info(f"Updated FCM token for user {request.user.email}")
+            
+            return Response({
+                'message': 'FCM token updated successfully'
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request):
+        """Remove user's FCM token (for logout)"""
+        if request.user.fcm_token:
+            request.user.fcm_token = None
+            request.user.save(update_fields=['fcm_token'])
+            
+            logger.info(f"Removed FCM token for user {request.user.email}")
+            
+            return Response({
+                'message': 'FCM token removed successfully'
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'message': 'No FCM token to remove'
+            }, status=status.HTTP_200_OK)
+
+
+class MutedInstructorsView(APIView):
+    """
+    Get list of muted instructors and mute new instructors
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get list of muted instructors"""
+        muted = MutedInstructor.objects.filter(user=request.user).select_related('instructor')
+        serializer = MutedInstructorSerializer(muted, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """Mute an instructor"""
+        serializer = MuteInstructorSerializer(data=request.data)
+        if serializer.is_valid():
+            instructor_id = serializer.validated_data['instructor_id']
+            
+            # Check if user is trying to mute themselves
+            if instructor_id == request.user.id:
+                return Response({
+                    'error': 'You cannot mute yourself'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create or get muted instructor relationship
+            muted, created = MutedInstructor.objects.get_or_create(
+                user=request.user,
+                instructor_id=instructor_id
+            )
+            
+            if created:
+                logger.info(f"User {request.user.email} muted instructor {instructor_id}")
+                return Response({
+                    'message': 'Instructor muted successfully'
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    'message': 'Instructor already muted'
+                }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UnmuteInstructorView(APIView):
+    """
+    Unmute a specific instructor
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, instructor_id):
+        """Unmute an instructor"""
+        try:
+            muted = MutedInstructor.objects.get(
+                user=request.user,
+                instructor_id=instructor_id
+            )
+            muted.delete()
+            
+            logger.info(f"User {request.user.email} unmuted instructor {instructor_id}")
+            
+            return Response({
+                'message': 'Instructor unmuted successfully'
+            }, status=status.HTTP_200_OK)
+            
+        except MutedInstructor.DoesNotExist:
+            return Response({
+                'error': 'Instructor is not muted'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+class CheckMutedStatusView(APIView):
+    """
+    Check if a specific instructor is muted
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, instructor_id):
+        """Check if instructor is muted"""
+        is_muted = MutedInstructor.objects.filter(
+            user=request.user,
+            instructor_id=instructor_id
+        ).exists()
+        
+        return Response({
+            'is_muted': is_muted,
+            'instructor_id': instructor_id
+        }, status=status.HTTP_200_OK)

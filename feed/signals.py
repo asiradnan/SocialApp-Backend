@@ -1,7 +1,10 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.db import transaction
-from feed.models import PostReaction, Comment, PollVote, UserScore
+from feed.models import PostReaction, Comment, PollVote, UserScore, Post, Poll
+import logging
+
+logger = logging.getLogger(__name__)
 
 @receiver(post_save, sender=Comment)
 def update_comment_count_on_create(sender, instance, created, **kwargs):
@@ -88,3 +91,28 @@ def handle_poll_vote_deleted(sender, instance, **kwargs):
     with transaction.atomic():
         user_score = UserScore.get_or_create_for_user(instance.user)
         user_score.remove_poll_vote_points()
+
+
+# FCM NOTIFICATION SIGNALS
+@receiver(post_save, sender=Post)
+def send_post_notification(sender, instance, created, **kwargs):
+    """Send FCM notification when a new post is created"""
+    if created:
+        try:
+            from utils.fcm_helper import send_post_notification as send_fcm_post
+            # Send notification in background (don't block post creation)
+            transaction.on_commit(lambda: send_fcm_post(instance, instance.author))
+        except Exception as e:
+            logger.error(f"Failed to send FCM notification for post {instance.id}: {str(e)}")
+
+
+@receiver(post_save, sender=Poll)
+def send_poll_notification(sender, instance, created, **kwargs):
+    """Send FCM notification when a new poll is created"""
+    if created:
+        try:
+            from utils.fcm_helper import send_poll_notification as send_fcm_poll
+            # Send notification in background (don't block poll creation)
+            transaction.on_commit(lambda: send_fcm_poll(instance, instance.author))
+        except Exception as e:
+            logger.error(f"Failed to send FCM notification for poll {instance.id}: {str(e)}")

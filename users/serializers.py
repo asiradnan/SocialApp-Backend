@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, ProfilePicture
+from .models import CustomUser, ProfilePicture, MutedInstructor
 from django.contrib.auth.password_validation import validate_password
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -163,6 +163,40 @@ class ProfilePictureSerializer(serializers.ModelSerializer):
                 )
         
         return value
+
+
+class FCMTokenSerializer(serializers.Serializer):
+    """Serializer for updating FCM token"""
+    fcm_token = serializers.CharField(max_length=255, required=True)
+
+
+class MutedInstructorSerializer(serializers.ModelSerializer):
+    """Serializer for muted instructors"""
+    instructor_name = serializers.SerializerMethodField()
+    instructor_email = serializers.EmailField(source='instructor.email', read_only=True)
+    
+    class Meta:
+        model = MutedInstructor
+        fields = ['id', 'instructor', 'instructor_name', 'instructor_email', 'muted_at']
+        read_only_fields = ['id', 'muted_at']
+    
+    def get_instructor_name(self, obj):
+        return f"{obj.instructor.first_name} {obj.instructor.last_name}"
+
+
+class MuteInstructorSerializer(serializers.Serializer):
+    """Serializer for muting an instructor"""
+    instructor_id = serializers.IntegerField(required=True)
+    
+    def validate_instructor_id(self, value):
+        """Validate that the instructor exists and is actually an instructor"""
+        try:
+            instructor = CustomUser.objects.get(id=value)
+            if instructor.user_type != 'instructor':
+                raise serializers.ValidationError("This user is not an instructor")
+            return value
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("Instructor not found")
 
     def create(self, validated_data):
         user = self.context['request'].user

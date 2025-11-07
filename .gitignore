@@ -1,4 +1,30 @@
 /venv/
 db.sqlite3
 
+# Firebase Service Account Credentials (NEVER COMMIT!)
+*-firebase-adminsdk-*.json
+firebase-service-account.json
+socalwelfare-firebase-adminsdk-*.json
 
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Django
+*.log
+local_settings.py
+/media/
+/static/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
