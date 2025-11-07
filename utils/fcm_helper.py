@@ -149,6 +149,8 @@ def send_post_notification(post, author):
     """
     from users.models import CustomUser, MutedInstructor
     
+    logger.info(f"📝 POST CREATED: Post ID={post.id} by {author.first_name} {author.last_name} (ID={author.id})")
+    
     # Get all users with FCM tokens except:
     # 1. The post author
     # 2. Users who muted this instructor
@@ -165,8 +167,10 @@ def send_post_notification(post, author):
     tokens = list(users_with_tokens)
     
     if not tokens:
-        logger.info("No FCM tokens found for post notification")
+        logger.warning(f"❌ No FCM tokens found for post {post.id} - No recipients to notify")
         return {'success': False, 'message': 'No recipients'}
+    
+    logger.info(f"📤 Sending post notification to {len(tokens)} device(s) for Post ID={post.id}")
     
     # Prepare notification
     title = "New Post! 📝"
@@ -181,8 +185,15 @@ def send_post_notification(post, author):
     
     result = send_fcm_notification(tokens, title, body, data)
     
+    # Log result
+    if result['success']:
+        logger.info(f"✅ POST NOTIFICATION SUCCESS: Post ID={post.id}, Sent={result['success_count']}/{result['total']}, Failed={result['failed_count']}")
+    else:
+        logger.error(f"❌ POST NOTIFICATION FAILED: Post ID={post.id}, All {result['total']} attempts failed")
+    
     # Clean up invalid tokens
     if result.get('invalid_tokens'):
+        logger.warning(f"🧹 Cleaning up {len(result['invalid_tokens'])} invalid tokens")
         _remove_invalid_tokens(result['invalid_tokens'])
     
     return result
@@ -201,6 +212,8 @@ def send_poll_notification(poll, author):
     """
     from users.models import CustomUser, MutedInstructor
     
+    logger.info(f"📊 POLL CREATED: Poll ID={poll.id} by {author.first_name} {author.last_name} (ID={author.id})")
+    
     # Get all users with FCM tokens except:
     # 1. The poll author
     # 2. Users who muted this instructor
@@ -217,8 +230,10 @@ def send_poll_notification(poll, author):
     tokens = list(users_with_tokens)
     
     if not tokens:
-        logger.info("No FCM tokens found for poll notification")
+        logger.warning(f"❌ No FCM tokens found for poll {poll.id} - No recipients to notify")
         return {'success': False, 'message': 'No recipients'}
+    
+    logger.info(f"📤 Sending poll notification to {len(tokens)} device(s) for Poll ID={poll.id}")
     
     # Prepare notification
     title = "New Poll Available! 📊"
@@ -233,8 +248,15 @@ def send_poll_notification(poll, author):
     
     result = send_fcm_notification(tokens, title, body, data)
     
+    # Log result
+    if result['success']:
+        logger.info(f"✅ POLL NOTIFICATION SUCCESS: Poll ID={poll.id}, Sent={result['success_count']}/{result['total']}, Failed={result['failed_count']}")
+    else:
+        logger.error(f"❌ POLL NOTIFICATION FAILED: Poll ID={poll.id}, All {result['total']} attempts failed")
+    
     # Clean up invalid tokens
     if result.get('invalid_tokens'):
+        logger.warning(f"🧹 Cleaning up {len(result['invalid_tokens'])} invalid tokens")
         _remove_invalid_tokens(result['invalid_tokens'])
     
     return result

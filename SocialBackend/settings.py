@@ -155,13 +155,30 @@ GOOGLE_CLIENT_ID = "318771680333-sc9qpmstk0nfb71brdv3qqhl6d1ihp0u.apps.googleuse
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'simple',
         },
         'file': {
             'class': 'logging.FileHandler',
             'filename': 'django.log',
+            'formatter': 'verbose',
+        },
+        'fcm_file': {
+            'class': 'logging.FileHandler',
+            'filename': 'fcm_notifications.log',
+            'formatter': 'verbose',
         },
     },
     'root': {
@@ -177,6 +194,16 @@ LOGGING = {
         'users': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
+            'propagate': False,
+        },
+        'feed': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'utils.fcm_helper': {
+            'handlers': ['console', 'fcm_file', 'file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },

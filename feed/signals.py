@@ -98,21 +98,25 @@ def handle_poll_vote_deleted(sender, instance, **kwargs):
 def send_post_notification(sender, instance, created, **kwargs):
     """Send FCM notification when a new post is created"""
     if created:
+        logger.info(f"🔔 Signal triggered: New post created (ID={instance.id})")
         try:
             from utils.fcm_helper import send_post_notification as send_fcm_post
             # Send notification in background (don't block post creation)
             transaction.on_commit(lambda: send_fcm_post(instance, instance.author))
+            logger.info(f"📲 FCM notification scheduled for post {instance.id}")
         except Exception as e:
-            logger.error(f"Failed to send FCM notification for post {instance.id}: {str(e)}")
+            logger.error(f"❌ Failed to schedule FCM notification for post {instance.id}: {str(e)}", exc_info=True)
 
 
 @receiver(post_save, sender=Poll)
 def send_poll_notification(sender, instance, created, **kwargs):
     """Send FCM notification when a new poll is created"""
     if created:
+        logger.info(f"🔔 Signal triggered: New poll created (ID={instance.id})")
         try:
             from utils.fcm_helper import send_poll_notification as send_fcm_poll
             # Send notification in background (don't block poll creation)
             transaction.on_commit(lambda: send_fcm_poll(instance, instance.author))
+            logger.info(f"📲 FCM notification scheduled for poll {instance.id}")
         except Exception as e:
-            logger.error(f"Failed to send FCM notification for poll {instance.id}: {str(e)}")
+            logger.error(f"❌ Failed to schedule FCM notification for poll {instance.id}: {str(e)}", exc_info=True)
