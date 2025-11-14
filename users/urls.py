@@ -2,7 +2,8 @@ from django.urls import path
 from .views import (
     RegisterView, LogoutView, LoginView, UserView, PasswordView, 
     GoogleAuthView, GoogleSignupView, ProfilePictureView, ProfilePictureDetailView,
-    FCMTokenView, MutedInstructorsView, UnmuteInstructorView, CheckMutedStatusView
+    FCMTokenView, MutedInstructorsView, UnmuteInstructorView, CheckMutedStatusView,
+    InstructorRatingView, SubmitRatingView
 )
 
 urlpatterns = [
@@ -21,4 +22,8 @@ urlpatterns = [
     path('muted-instructors/', MutedInstructorsView.as_view(), name='muted-instructors'),
     path('muted-instructors/<int:instructor_id>/', UnmuteInstructorView.as_view(), name='unmute-instructor'),
     path('muted-instructors/<int:instructor_id>/status/', CheckMutedStatusView.as_view(), name='check-muted-status'),
+    
+    # Instructor ratings
+    path('instructors/<int:instructor_id>/rating/', InstructorRatingView.as_view(), name='instructor-rating'),
+    path('instructors/rating/', SubmitRatingView.as_view(), name='submit-rating'),
 ]

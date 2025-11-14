@@ -15,9 +15,9 @@ from .serializers import (
     RegisterSerializer, LoginSerializer, UserProfileSerializer, 
     GoogleAuthSerializer, GoogleSignupSerializer, ProfilePictureSerializer,
     ProfilePictureUploadSerializer, FCMTokenSerializer, MutedInstructorSerializer,
-    MuteInstructorSerializer
+    MuteInstructorSerializer, SubmitRatingSerializer, RatingSerializer
 )
-from .models import CustomUser, ProfilePicture, MutedInstructor
+from .models import CustomUser, ProfilePicture, MutedInstructor, Rating
 
 logger = logging.getLogger(__name__)
 
@@ -530,3 +530,74 @@ class CheckMutedStatusView(APIView):
             'is_muted': is_muted,
             'instructor_id': instructor_id
         }, status=status.HTTP_200_OK)
+
+
+class InstructorRatingView(APIView):
+    """
+    Get instructor's average rating and total ratings count
+    """
+    def get(self, request, instructor_id):
+        """Get average rating and count for an instructor"""
+        try:
+            # Verify instructor exists and is an instructor
+            instructor = CustomUser.objects.get(id=instructor_id)
+            if instructor.user_type != 'instructor':
+                return Response({
+                    'error': 'User is not an instructor'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get ratings for this instructor
+            from django.db.models import Avg
+            ratings = Rating.objects.filter(instructor_id=instructor_id)
+            avg_rating = ratings.aggregate(Avg('rating'))['rating__avg'] or 0.0
+            total_ratings = ratings.count()
+            
+            # Get user's rating if authenticated
+            user_rating = None
+            if request.user.is_authenticated:
+                user_rating_obj = ratings.filter(user=request.user).first()
+                if user_rating_obj:
+                    user_rating = user_rating_obj.rating
+            
+            return Response({
+                'instructor_id': instructor_id,
+                'average_rating': round(avg_rating, 1),
+                'total_ratings': total_ratings,
+                'user_rating': user_rating
+            }, status=status.HTTP_200_OK)
+            
+        except CustomUser.DoesNotExist:
+            return Response({
+                'error': 'Instructor not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+class SubmitRatingView(APIView):
+    """
+    Submit or update a rating for an instructor
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Submit or update rating"""
+        serializer = SubmitRatingSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            instructor_id = serializer.validated_data['instructor_id']
+            rating_value = serializer.validated_data['rating']
+            
+            # Update or create rating
+            rating, created = Rating.objects.update_or_create(
+                user=request.user,
+                instructor_id=instructor_id,
+                defaults={'rating': rating_value}
+            )
+            
+            action = 'submitted' if created else 'updated'
+            logger.info(f"User {request.user.email} {action} rating {rating_value} for instructor {instructor_id}")
+            
+            return Response({
+                'message': f'Rating {action} successfully',
+                'rating': rating_value
+            }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

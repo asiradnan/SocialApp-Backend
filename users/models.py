@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 import os
 from django.utils import timezone
 
@@ -99,4 +100,29 @@ class MutedInstructor(models.Model):
     
     def __str__(self):
         return f"{self.user.email} muted {self.instructor.email}"
+
+
+class Rating(models.Model):
+    """Model to track user ratings for instructors"""
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='ratings_given')
+    instructor = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='ratings_received')
+    rating = models.IntegerField(
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(5)
+        ],
+        help_text="Rating value from 1 to 5"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('user', 'instructor')
+        indexes = [
+            models.Index(fields=['instructor']),
+            models.Index(fields=['user']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} rated {self.instructor.email}: {self.rating}/5"
 

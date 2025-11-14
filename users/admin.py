@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CustomUser, ProfilePicture, MutedInstructor
+from .models import CustomUser, ProfilePicture, MutedInstructor, Rating
 
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):
@@ -48,6 +48,17 @@ class MutedInstructorAdmin(admin.ModelAdmin):
     list_filter = ['muted_at']
     search_fields = ['user__email', 'instructor__email', 'user__first_name', 'instructor__first_name']
     readonly_fields = ['muted_at']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user', 'instructor')
+
+
+@admin.register(Rating)
+class RatingAdmin(admin.ModelAdmin):
+    list_display = ['user', 'instructor', 'rating', 'created_at', 'updated_at']
+    list_filter = ['rating', 'created_at', 'updated_at']
+    search_fields = ['user__email', 'instructor__email', 'user__first_name', 'instructor__first_name']
+    readonly_fields = ['created_at', 'updated_at']
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user', 'instructor')

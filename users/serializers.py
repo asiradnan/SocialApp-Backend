@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, ProfilePicture, MutedInstructor
+from .models import CustomUser, ProfilePicture, MutedInstructor, Rating
 from django.contrib.auth.password_validation import validate_password
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -232,3 +232,43 @@ class ProfilePictureUploadSerializer(serializers.Serializer):
                 )
         
         return value
+
+
+class RatingSerializer(serializers.ModelSerializer):
+    """Serializer for instructor ratings"""
+    user_name = serializers.SerializerMethodField()
+    instructor_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Rating
+        fields = ['id', 'user', 'instructor', 'user_name', 'instructor_name', 'rating', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_user_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}"
+    
+    def get_instructor_name(self, obj):
+        return f"{obj.instructor.first_name} {obj.instructor.last_name}"
+
+
+class SubmitRatingSerializer(serializers.Serializer):
+    """Serializer for submitting a rating"""
+    instructor_id = serializers.IntegerField(required=True)
+    rating = serializers.IntegerField(required=True, min_value=1, max_value=5)
+    
+    def validate_instructor_id(self, value):
+        """Validate that the instructor exists and is actually an instructor"""
+        try:
+            instructor = CustomUser.objects.get(id=value)
+            if instructor.user_type != 'instructor':
+                raise serializers.ValidationError("This user is not an instructor")
+            return value
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("Instructor not found")
+    
+    def validate(self, data):
+        """Validate that user is not rating themselves"""
+        request = self.context.get('request')
+        if request and request.user.id == data['instructor_id']:
+            raise serializers.ValidationError({"error": "You cannot rate yourself"})
+        return data
