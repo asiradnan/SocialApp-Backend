@@ -219,6 +219,7 @@ class Comment(models.Model):
 
 class PostReaction(models.Model):    
     REACTION_CHOICES = [
+        ('like', '👍'),
         ('love', '❤️'),
         ('haha', '😂'),
         ('sad', '😢'),
