@@ -149,7 +149,7 @@ SIMPLE_JWT = {
 }
 
 # Add this to your settings.py
-GOOGLE_CLIENT_ID = "318771680333-sc9qpmstk0nfb71brdv3qqhl6d1ihp0u.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID = "318771680333-avqfv48ic21nommohv1m2n5m7tiej3pk.apps.googleusercontent.com"
 
 # Make sure you have logging configured
 LOGGING = {
